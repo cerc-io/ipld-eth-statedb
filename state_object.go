@@ -134,7 +134,7 @@ func (s *stateObject) touch() {
 	}
 }
 
-func (s *stateObject) getTrie(db state.Database) state.Trie {
+func (s *stateObject) getTrie(db Database) state.Trie {
 	if s.trie == nil {
 		// Try fetching from prefetcher first
 		// We don't prefetch empty tries
@@ -156,7 +156,7 @@ func (s *stateObject) getTrie(db state.Database) state.Trie {
 }
 
 // GetState retrieves a value from the account storage trie.
-func (s *stateObject) GetState(db state.Database, key common.Hash) common.Hash {
+func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
 	// If the fake storage is set, only lookup the state here(in the debugging mode)
 	if s.fakeStorage != nil {
 		return s.fakeStorage[key]
@@ -171,7 +171,7 @@ func (s *stateObject) GetState(db state.Database, key common.Hash) common.Hash {
 }
 
 // GetCommittedState retrieves a value from the committed account storage trie.
-func (s *stateObject) GetCommittedState(db state.Database, key common.Hash) common.Hash {
+func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Hash {
 	// If the fake storage is set, only lookup the state here(in the debugging mode)
 	if s.fakeStorage != nil {
 		return s.fakeStorage[key]
@@ -229,7 +229,7 @@ func (s *stateObject) GetCommittedState(db state.Database, key common.Hash) comm
 }
 
 // SetState updates a value in account storage.
-func (s *stateObject) SetState(db state.Database, key, value common.Hash) {
+func (s *stateObject) SetState(db Database, key, value common.Hash) {
 	// If the fake storage is set, put the temporary state update here.
 	if s.fakeStorage != nil {
 		s.fakeStorage[key] = value
@@ -291,7 +291,7 @@ func (s *stateObject) finalise(prefetch bool) {
 
 // updateTrie writes cached storage modifications into the object's storage trie.
 // It will return nil if the trie has not been loaded and no changes have been made
-func (s *stateObject) updateTrie(db state.Database) state.Trie {
+func (s *stateObject) updateTrie(db Database) state.Trie {
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise(false) // Don't prefetch anymore, pull directly if need be
 	if len(s.pendingStorage) == 0 {
@@ -348,7 +348,7 @@ func (s *stateObject) updateTrie(db state.Database) state.Trie {
 }
 
 // UpdateRoot sets the trie root to the current root hash of
-func (s *stateObject) updateRoot(db state.Database) {
+func (s *stateObject) updateRoot(db Database) {
 	// If nothing changed, don't bother with hashing anything
 	if s.updateTrie(db) == nil {
 		return
@@ -362,7 +362,7 @@ func (s *stateObject) updateRoot(db state.Database) {
 
 // CommitTrie the storage trie of the object to db.
 // This updates the trie root.
-func (s *stateObject) CommitTrie(db state.Database) (*trie.NodeSet, error) {
+func (s *stateObject) CommitTrie(db Database) (*trie.NodeSet, error) {
 	// If nothing changed, don't bother with hashing anything
 	if s.updateTrie(db) == nil {
 		return nil, nil
@@ -441,7 +441,7 @@ func (s *stateObject) Address() common.Address {
 }
 
 // Code returns the contract code associated with this object, if any.
-func (s *stateObject) Code(db state.Database) []byte {
+func (s *stateObject) Code(db Database) []byte {
 	if s.code != nil {
 		return s.code
 	}
@@ -459,7 +459,7 @@ func (s *stateObject) Code(db state.Database) []byte {
 // CodeSize returns the size of the contract code associated with this object,
 // or zero if none. This method is an almost mirror of Code, but uses a cache
 // inside the database to avoid loading codes seen recently.
-func (s *stateObject) CodeSize(db state.Database) int {
+func (s *stateObject) CodeSize(db Database) int {
 	if s.code != nil {
 		return len(s.code)
 	}

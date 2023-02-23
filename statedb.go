@@ -55,7 +55,7 @@ var (
 // * Contracts
 // * Accounts
 type StateDB struct {
-	db         state.Database
+	db         Database
 	prefetcher *triePrefetcher
 	trie       state.Trie
 	hasher     crypto.KeccakState
@@ -121,7 +121,7 @@ type StateDB struct {
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, db state.Database, snaps *snapshot.Tree) (*StateDB, error) {
+func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
