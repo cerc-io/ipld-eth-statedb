@@ -8,6 +8,26 @@ import (
 	"github.com/ethereum/temp/common"
 )
 
+/*
+The portions of the EVM we want to leverage only use the following methods:
+
+GetBalance
+Snapshot
+Exist
+CreateAccount
+SubBalance
+AddBalance
+GetCode
+GetCodeHash
+RevertToSnapshot
+GetNonce
+SetNonce
+AddAddressToAccessList
+SetCode
+
+The rest can be left with panics for now
+ */
+
 var _ vm.StateDB = &StateDB{}
 
 type StateDB struct {
