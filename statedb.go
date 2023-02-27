@@ -427,6 +427,7 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 }
 
 // TODO: not sure trie access can be replaced for this method, might need to use ipfs-ethdb
+// but, as far as I can tell, this method is only ever used in tests
 func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error {
 	so := db.getStateObject(addr)
 	if so == nil {

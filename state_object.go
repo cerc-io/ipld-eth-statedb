@@ -3,7 +3,6 @@ package ipld_eth_statedb
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"math/big"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
@@ -49,7 +47,6 @@ func (s Storage) Copy() Storage {
 // The usage pattern is as follows:
 // First you need to obtain a state object.
 // Account values can be accessed and modified through the object.
-// Finally, call CommitTrie to write the modified storage trie into a database.
 type stateObject struct {
 	address  common.Address
 	addrHash common.Hash // hash of ethereum address of the account
@@ -105,11 +102,6 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 		pendingStorage: make(Storage),
 		dirtyStorage:   make(Storage),
 	}
-}
-
-// EncodeRLP implements rlp.Encoder.
-func (s *stateObject) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, &s.data)
 }
 
 // setError remembers the first non-nil error it is called with.
@@ -211,24 +203,6 @@ func (s *stateObject) SetState(db Database, key, value common.Hash) {
 	s.setState(key, value)
 }
 
-// SetStorage replaces the entire state storage with the given one.
-//
-// After this function is called, all original state will be ignored and state
-// lookup only happens in the fake state storage.
-//
-// Note this function should only be used for debugging purpose.
-func (s *stateObject) SetStorage(storage map[common.Hash]common.Hash) {
-	// Allocate fake storage if it's nil.
-	if s.fakeStorage == nil {
-		s.fakeStorage = make(Storage)
-	}
-	for key, value := range storage {
-		s.fakeStorage[key] = value
-	}
-	// Don't bother journal since this function should only be used for
-	// debugging and the `fake` storage won't be committed to database.
-}
-
 func (s *stateObject) setState(key, value common.Hash) {
 	s.dirtyStorage[key] = value
 }
@@ -300,27 +274,6 @@ func (s *stateObject) updateRoot(db Database) {
 		defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
 	}
 	s.data.Root = s.trie.Hash()
-}
-
-// CommitTrie the storage trie of the object to db.
-// This updates the trie root.
-func (s *stateObject) CommitTrie(db Database) (*trie.NodeSet, error) {
-	// If nothing changed, don't bother with hashing anything
-	if s.updateTrie(db) == nil {
-		return nil, nil
-	}
-	if s.dbErr != nil {
-		return nil, s.dbErr
-	}
-	// Track the amount of time wasted on committing the storage trie
-	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
-	}
-	root, nodes, err := s.trie.Commit(false)
-	if err == nil {
-		s.data.Root = root
-	}
-	return nodes, err
 }
 
 // AddBalance adds amount to s's balance.
