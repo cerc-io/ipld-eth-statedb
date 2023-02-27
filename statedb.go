@@ -56,7 +56,6 @@ var (
 // * Accounts
 type StateDB struct {
 	db         Database
-	prefetcher *triePrefetcher
 	trie       state.Trie
 	hasher     crypto.KeccakState
 
