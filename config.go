@@ -37,7 +37,6 @@ func makePGXConfig(config Config) (*pgxpool.Config, error) {
 		return nil, err
 	}
 
-	//conf.ConnConfig.BuildStatementCache = nil
 	conf.ConnConfig.Config.Host = config.Hostname
 	conf.ConnConfig.Config.Port = uint16(config.Port)
 	conf.ConnConfig.Config.Database = config.DatabaseName
