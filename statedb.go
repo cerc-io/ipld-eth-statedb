@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -53,11 +52,6 @@ type StateDB struct {
 	// originBlockHash is the blockhash for the state we are working on top of
 	originBlockHash common.Hash
 
-	snaps         *snapshot.Tree
-	snapDestructs map[common.Hash]struct{}
-	snapAccounts  map[common.Hash][]byte
-	snapStorage   map[common.Hash]map[common.Hash][]byte
-
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	stateObjects        map[common.Address]*stateObject
 	stateObjectsPending map[common.Address]struct{} // State objects finalized but not yet written to the trie
@@ -90,30 +84,15 @@ type StateDB struct {
 	nextRevisionId int
 
 	// Measurements gathered during execution for debugging purposes
-	AccountReads         time.Duration
-	AccountHashes        time.Duration
-	AccountUpdates       time.Duration
-	AccountCommits       time.Duration
-	StorageReads         time.Duration
-	StorageHashes        time.Duration
-	StorageUpdates       time.Duration
-	StorageCommits       time.Duration
-	SnapshotAccountReads time.Duration
-	SnapshotStorageReads time.Duration
-	SnapshotCommits      time.Duration
-
-	AccountUpdated int
-	StorageUpdated int
-	AccountDeleted int
-	StorageDeleted int
+	AccountReads time.Duration
+	StorageReads time.Duration
 }
 
 // New creates a new state from a given trie.
-func New(blockHash common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
+func New(blockHash common.Hash, db Database) (*StateDB, error) {
 	sdb := &StateDB{
 		db:                  db,
 		originBlockHash:     blockHash,
-		snaps:               snaps,
 		stateObjects:        make(map[common.Address]*stateObject),
 		stateObjectsPending: make(map[common.Address]struct{}),
 		stateObjectsDirty:   make(map[common.Address]struct{}),
