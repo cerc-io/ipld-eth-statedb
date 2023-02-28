@@ -6,16 +6,22 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/metrics"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var emptyCodeHash = crypto.Keccak256(nil)
+var (
+	// emptyRoot is the known root hash of an empty trie.
+	// this is calculated as: emptyRoot = crypto.Keccak256(rlp.Encode([][]byte{}))
+	// that is, the keccak356 hash of the rlp encoding of an empty trie node (empty byte slice array)
+	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	// emptyCodeHash is the CodeHash for an EOA, for an account without contract code deployed
+	emptyCodeHash = crypto.Keccak256(nil)
+)
 
 type Code []byte
 
@@ -61,8 +67,7 @@ type stateObject struct {
 	dbErr error
 
 	// Write caches.
-	trie state.Trie // storage trie, which becomes non-nil on first access
-	code Code       // contract bytecode, which gets set when code is loaded
+	code Code // contract bytecode, which gets set when code is loaded
 
 	originStorage  Storage // Storage cache of original entries to dedup rewrites, reset for every transaction
 	pendingStorage Storage // Storage entries that need to be flushed to disk, at the end of an entire block
@@ -126,18 +131,6 @@ func (s *stateObject) touch() {
 	}
 }
 
-func (s *stateObject) getTrie(db Database) state.Trie {
-	if s.trie == nil {
-		var err error
-		s.trie, err = db.OpenStorageTrie(s.addrHash, s.data.Root)
-		if err != nil {
-			s.trie, _ = db.OpenStorageTrie(s.addrHash, common.Hash{})
-			s.setError(fmt.Errorf("can't create storage trie: %v", err))
-		}
-	}
-	return s.trie
-}
-
 // GetState retrieves a value from the account storage trie.
 func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
 	// If the fake storage is set, only lookup the state here(in the debugging mode)
@@ -166,10 +159,16 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	if value, cached := s.originStorage[key]; cached {
 		return value
 	}
-	// If no live objects are available, attempt to use snapshots
-	var (
-		enc []byte
-	)
+	// If no live objects are available, load from database
+	start := time.Now()
+	enc, err := db.StorageSlot(s.addrHash, key)
+	if metrics.EnabledExpensive {
+		s.db.StorageReads += time.Since(start)
+	}
+	if err != nil {
+		s.setError(err)
+		return common.Hash{}
+	}
 	var value common.Hash
 	if len(enc) > 0 {
 		_, content, _, err := rlp.Split(enc)
@@ -207,75 +206,6 @@ func (s *stateObject) setState(key, value common.Hash) {
 	s.dirtyStorage[key] = value
 }
 
-// finalise moves all dirty storage slots into the pending area to be hashed or
-// committed later. It is invoked at the end of every transaction.
-func (s *stateObject) finalise() {
-	slotsToPrefetch := make([][]byte, 0, len(s.dirtyStorage))
-	for key, value := range s.dirtyStorage {
-		s.pendingStorage[key] = value
-		if value != s.originStorage[key] {
-			slotsToPrefetch = append(slotsToPrefetch, common.CopyBytes(key[:])) // Copy needed for closure
-		}
-	}
-	if len(s.dirtyStorage) > 0 {
-		s.dirtyStorage = make(Storage)
-	}
-}
-
-// updateTrie writes cached storage modifications into the object's storage trie.
-// It will return nil if the trie has not been loaded and no changes have been made
-func (s *stateObject) updateTrie(db Database) state.Trie {
-	// Make sure all dirty slots are finalized into the pending storage area
-	s.finalise()
-	if len(s.pendingStorage) == 0 {
-		return s.trie
-	}
-	// Track the amount of time wasted on updating the storage trie
-	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
-	}
-	// Insert all the pending updates into the trie
-	tr := s.getTrie(db)
-
-	usedStorage := make([][]byte, 0, len(s.pendingStorage))
-	for key, value := range s.pendingStorage {
-		// Skip noop changes, persist actual changes
-		if value == s.originStorage[key] {
-			continue
-		}
-		s.originStorage[key] = value
-
-		var v []byte
-		if (value == common.Hash{}) {
-			s.setError(tr.TryDelete(key[:]))
-			s.db.StorageDeleted += 1
-		} else {
-			// Encoding []byte cannot fail, ok to ignore the error.
-			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-			s.setError(tr.TryUpdate(key[:], v))
-			s.db.StorageUpdated += 1
-		}
-		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
-	}
-	if len(s.pendingStorage) > 0 {
-		s.pendingStorage = make(Storage)
-	}
-	return tr
-}
-
-// UpdateRoot sets the trie root to the current root hash of
-func (s *stateObject) updateRoot(db Database) {
-	// If nothing changed, don't bother with hashing anything
-	if s.updateTrie(db) == nil {
-		return
-	}
-	// Track the amount of time wasted on hashing the storage trie
-	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
-	}
-	s.data.Root = s.trie.Hash()
-}
-
 // AddBalance adds amount to s's balance.
 // It is used to add funds to the destination account of a transfer.
 func (s *stateObject) AddBalance(amount *big.Int) {
@@ -309,21 +239,6 @@ func (s *stateObject) SetBalance(amount *big.Int) {
 
 func (s *stateObject) setBalance(amount *big.Int) {
 	s.data.Balance = amount
-}
-
-func (s *stateObject) deepCopy(db *StateDB) *stateObject {
-	stateObject := newObject(db, s.address, s.data)
-	if s.trie != nil {
-		stateObject.trie = db.db.CopyTrie(s.trie)
-	}
-	stateObject.code = s.code
-	stateObject.dirtyStorage = s.dirtyStorage.Copy()
-	stateObject.originStorage = s.originStorage.Copy()
-	stateObject.pendingStorage = s.pendingStorage.Copy()
-	stateObject.suicided = s.suicided
-	stateObject.dirtyCode = s.dirtyCode
-	stateObject.deleted = s.deleted
-	return stateObject
 }
 
 //

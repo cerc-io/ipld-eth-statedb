@@ -7,14 +7,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 /*
@@ -44,20 +41,14 @@ type revision struct {
 	journalIndex int
 }
 
-var (
-	// emptyRoot is the known root hash of an empty trie.
-	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-)
-
 // StateDB structs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
 // nested states. It's the general query interface to retrieve:
 // * Contracts
 // * Accounts
 type StateDB struct {
-	db         Database
-	trie       state.Trie
-	hasher     crypto.KeccakState
+	db     Database
+	hasher crypto.KeccakState
 
 	// originalRoot is the pre-state root, before any changes were made.
 	// It will be updated when the Commit is called.
@@ -120,13 +111,8 @@ type StateDB struct {
 
 // New creates a new state from a given trie.
 func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
-	tr, err := db.OpenTrie(root)
-	if err != nil {
-		return nil, err
-	}
 	sdb := &StateDB{
 		db:                  db,
-		trie:                tr,
 		originalRoot:        root,
 		snaps:               snaps,
 		stateObjects:        make(map[common.Address]*stateObject),
@@ -362,7 +348,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	// TODO: REPLACE TRIE ACCESS HERE
 	// can add a fallback option to use ipfsethdb to do the trie access if direct access fails
 	start := time.Now()
-	data, err := s.trie.TryGetAccount(addr.Bytes())
+	data, err := s.db.StateAccount(addr)
 	if metrics.EnabledExpensive {
 		s.AccountReads += time.Since(start)
 	}
@@ -426,35 +412,12 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 	}
 }
 
-// TODO: not sure trie access can be replaced for this method, might need to use ipfs-ethdb
-// but, as far as I can tell, this method is only ever used in tests
+// ForEachStorage satisfies vm.StateDB but is not implemented
 func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error {
-	so := db.getStateObject(addr)
-	if so == nil {
-		return nil
-	}
-	it := trie.NewIterator(so.getTrie(db.db).NodeIterator(nil))
-
-	for it.Next() {
-		key := common.BytesToHash(db.trie.GetKey(it.Key))
-		if value, dirty := so.dirtyStorage[key]; dirty {
-			if !cb(key, value) {
-				return nil
-			}
-			continue
-		}
-
-		if len(it.Value) > 0 {
-			_, content, _, err := rlp.Split(it.Value)
-			if err != nil {
-				return err
-			}
-			if !cb(key, common.BytesToHash(content)) {
-				return nil
-			}
-		}
-	}
-	return nil
+	// NOTE: as far as I can tell this method is only ever used in tests
+	// in that case, we can leave it unimplemented
+	// or if it needs to be implemented we can use iplfs-ethdb to do normal trie access
+	panic("ForEachStorage is not implemented")
 }
 
 // Snapshot returns an identifier for the current revision of the state.
