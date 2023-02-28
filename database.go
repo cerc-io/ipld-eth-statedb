@@ -3,8 +3,9 @@ package ipld_eth_statedb
 import (
 	"context"
 	"errors"
-	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -103,5 +104,13 @@ func (sd *stateDatabase) StateAccount(address common.Address) (*types.StateAccou
 }
 
 func (sd *stateDatabase) StorageSlot(addressHash, slotHash common.Hash) ([]byte, error) {
-	panic("implement me")
+	res := StorageSlotResult{}
+	if err := sd.pgdb.QueryRow(context.Background(), GetStorageSlot, addressHash.Hex(), slotHash.Hex()).Scan(&res); err != nil {
+		return nil, errNotFound
+	}
+	if res.Removed {
+		// TODO: check expected behavior for deleted/non existing accounts
+		return nil, nil
+	}
+	return res.Value, nil
 }

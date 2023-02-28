@@ -28,8 +28,8 @@ const (
 
 // StorageSlotResult struct for unpacking GetStorageSlot result
 type StorageSlotResult struct {
-	Value       string `db:"val"`
-	Removed     bool   `db:"removed"`
+	Value   []byte `db:"val"`
+	Removed bool   `db:"removed"`
 }
 
 // StateAccountResult struct for unpacking GetStateAccount result
