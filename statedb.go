@@ -50,9 +50,8 @@ type StateDB struct {
 	db     Database
 	hasher crypto.KeccakState
 
-	// originalRoot is the pre-state root, before any changes were made.
-	// It will be updated when the Commit is called.
-	originalRoot common.Hash
+	// originBlockHash is the blockhash for the state we are working on top of
+	originBlockHash common.Hash
 
 	snaps         *snapshot.Tree
 	snapDestructs map[common.Hash]struct{}
@@ -110,10 +109,10 @@ type StateDB struct {
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
+func New(blockHash common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
 	sdb := &StateDB{
 		db:                  db,
-		originalRoot:        root,
+		originBlockHash:     blockHash,
 		snaps:               snaps,
 		stateObjects:        make(map[common.Address]*stateObject),
 		stateObjectsPending: make(map[common.Address]struct{}),
@@ -348,7 +347,8 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	// TODO: REPLACE TRIE ACCESS HERE
 	// can add a fallback option to use ipfsethdb to do the trie access if direct access fails
 	start := time.Now()
-	data, err := s.db.StateAccount(addr)
+	addrHash := crypto.Keccak256Hash(addr.Bytes())
+	data, err := s.db.StateAccount(addrHash, s.originBlockHash)
 	if metrics.EnabledExpensive {
 		s.AccountReads += time.Since(start)
 	}
@@ -360,7 +360,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		return nil
 	}
 	// Insert into the live set
-	obj := newObject(s, addr, *data)
+	obj := newObject(s, addr, *data, s.originBlockHash)
 	s.setStateObject(obj)
 	return obj
 }
@@ -382,7 +382,7 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 // the given address, it is overwritten and returned as the second return value.
 func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
-	newobj = newObject(s, addr, types.StateAccount{})
+	newobj = newObject(s, addr, types.StateAccount{}, s.originBlockHash)
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
 	} else {

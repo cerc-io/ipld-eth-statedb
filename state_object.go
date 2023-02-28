@@ -54,10 +54,11 @@ func (s Storage) Copy() Storage {
 // First you need to obtain a state object.
 // Account values can be accessed and modified through the object.
 type stateObject struct {
-	address  common.Address
-	addrHash common.Hash // hash of ethereum address of the account
-	data     types.StateAccount
-	db       *StateDB
+	address   common.Address
+	addrHash  common.Hash // hash of ethereum address of the account
+	blockHash common.Hash // hash of the block this state object exists at or is being applied on top of
+	data      types.StateAccount
+	db        *StateDB
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -88,7 +89,7 @@ func (s *stateObject) empty() bool {
 }
 
 // newObject creates a state object.
-func newObject(db *StateDB, address common.Address, data types.StateAccount) *stateObject {
+func newObject(db *StateDB, address common.Address, data types.StateAccount, blockHash common.Hash) *stateObject {
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
 	}
@@ -102,6 +103,7 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 		db:             db,
 		address:        address,
 		addrHash:       crypto.Keccak256Hash(address[:]),
+		blockHash:      blockHash,
 		data:           data,
 		originStorage:  make(Storage),
 		pendingStorage: make(Storage),
@@ -161,7 +163,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	}
 	// If no live objects are available, load from database
 	start := time.Now()
-	enc, err := db.StorageSlot(s.addrHash, key)
+	enc, err := db.StorageValue(s.addrHash, key, s.blockHash)
 	if metrics.EnabledExpensive {
 		s.db.StorageReads += time.Since(start)
 	}

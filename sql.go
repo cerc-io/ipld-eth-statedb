@@ -21,6 +21,9 @@ const (
 						)
 						WHERE state_leaf_key = $1
 						AND storage_leaf_key = $2
+						AND header_cids.block_number <= (SELECT block_number
+															FROM eth.header_cids
+															WHERE block_hash = $3)
 						AND header_cids.block_hash = (SELECT canonical_header_hash(header_cids.block_number))
 						ORDER BY header_cids.block_number DESC
 						LIMIT 1`

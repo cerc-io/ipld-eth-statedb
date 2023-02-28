@@ -5,14 +5,10 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/crypto"
-
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
-	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/jackc/pgx/pgxpool"
 )
@@ -35,29 +31,29 @@ var (
 type Database interface {
 	ContractCode(addrHash common.Hash, codeHash common.Hash) ([]byte, error)
 	ContractCodeSize(addrHash common.Hash, codeHash common.Hash) (int, error)
-	StateAccount(address common.Address) (*types.StateAccount, error)
-	StorageSlot(addressHash, slotHash common.Hash) ([]byte, error)
+	StateAccount(addressHash, blockHash common.Hash) (*types.StateAccount, error)
+	StorageValue(addressHash, slotHash, blockHash common.Hash) ([]byte, error)
 }
 
 var _ Database = &stateDatabase{}
 
 type stateDatabase struct {
 	pgdb          *pgxpool.Pool
-	trieDB        *trie.Database
 	codeSizeCache *lru.Cache
 	codeCache     *fastcache.Cache
 }
 
-func NewStateDatabase(pgdb *pgxpool.Pool, ethdb ethdb.Database, config *trie.Config) (*stateDatabase, error) {
+// NewStateDatabase returns a new Database implementation using the provided postgres connection pool
+func NewStateDatabase(pgdb *pgxpool.Pool) (*stateDatabase, error) {
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &stateDatabase{
 		pgdb:          pgdb,
-		trieDB:        trie.NewDatabaseWithConfig(ethdb, config),
 		codeSizeCache: csc,
 		codeCache:     fastcache.New(codeCacheSize),
 	}, nil
 }
 
+// ContractCode satisfies Database, it returns the contract code for a give codehash
 func (sd *stateDatabase) ContractCode(_, codeHash common.Hash) ([]byte, error) {
 	if code := sd.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
 		return code, nil
@@ -75,6 +71,7 @@ func (sd *stateDatabase) ContractCode(_, codeHash common.Hash) ([]byte, error) {
 	return nil, errNotFound
 }
 
+// ContractCodeSize satisfies Database, it returns the length of the code for a provided codehash
 func (sd *stateDatabase) ContractCodeSize(_, codeHash common.Hash) (int, error) {
 	if cached, ok := sd.codeSizeCache.Get(codeHash); ok {
 		return cached.(int), nil
@@ -83,10 +80,11 @@ func (sd *stateDatabase) ContractCodeSize(_, codeHash common.Hash) (int, error) 
 	return len(code), err
 }
 
-func (sd *stateDatabase) StateAccount(address common.Address) (*types.StateAccount, error) {
+// StateAccount satisfies Database, it returns the types.StateAccount for a provided address and block hash
+func (sd *stateDatabase) StateAccount(addressHash, blockHash common.Hash) (*types.StateAccount, error) {
 	res := StateAccountResult{}
-	key := crypto.Keccak256Hash(address.Bytes())
-	if err := sd.pgdb.QueryRow(context.Background(), GetStateAccount, key.Hex()).Scan(&res); err != nil {
+	err := sd.pgdb.QueryRow(context.Background(), GetStateAccount, addressHash.Hex(), blockHash.Hex()).Scan(&res)
+	if err != nil {
 		return nil, errNotFound
 	}
 	if res.Removed {
@@ -103,9 +101,11 @@ func (sd *stateDatabase) StateAccount(address common.Address) (*types.StateAccou
 	}, nil
 }
 
-func (sd *stateDatabase) StorageSlot(addressHash, slotHash common.Hash) ([]byte, error) {
+// StorageValue satisfies Database, it returns the storage value for the provided address, slot, and block hash
+func (sd *stateDatabase) StorageValue(addressHash, slotHash, blockHash common.Hash) ([]byte, error) {
 	res := StorageSlotResult{}
-	if err := sd.pgdb.QueryRow(context.Background(), GetStorageSlot, addressHash.Hex(), slotHash.Hex()).Scan(&res); err != nil {
+	err := sd.pgdb.QueryRow(context.Background(), GetStorageSlot, addressHash.Hex(), slotHash.Hex(), blockHash.Hex()).Scan(&res)
+	if err != nil {
 		return nil, errNotFound
 	}
 	if res.Removed {
