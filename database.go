@@ -3,6 +3,8 @@ package ipld_eth_statedb
 import (
 	"context"
 	"errors"
+	"github.com/ethereum/go-ethereum/crypto"
+	"math/big"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -81,7 +83,23 @@ func (sd *stateDatabase) ContractCodeSize(_, codeHash common.Hash) (int, error) 
 }
 
 func (sd *stateDatabase) StateAccount(address common.Address) (*types.StateAccount, error) {
-	panic("implement me")
+	res := StateAccountResult{}
+	key := crypto.Keccak256Hash(address.Bytes())
+	if err := sd.pgdb.QueryRow(context.Background(), GetStateAccount, key.Hex()).Scan(&res); err != nil {
+		return nil, errNotFound
+	}
+	if res.Removed {
+		// TODO: check expected behavior for deleted/non existing accounts
+		return nil, nil
+	}
+	bal := new(big.Int)
+	bal.SetString(res.Balance, 10)
+	return &types.StateAccount{
+		Nonce:    res.Nonce,
+		Balance:  bal,
+		Root:     common.HexToHash(res.StorageRoot),
+		CodeHash: res.CodeHash,
+	}, nil
 }
 
 func (sd *stateDatabase) StorageSlot(addressHash, slotHash common.Hash) ([]byte, error) {

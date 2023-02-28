@@ -14,7 +14,7 @@ const (
 						AND header_cids.block_hash = (SELECT canonical_header_hash(header_cids.block_number))
 						ORDER BY header_cids.block_number DESC
 						LIMIT 1`
-	GetStorageSlot = `SELECT value, removed FROM eth.storage_cids
+	GetStorageSlot = `SELECT val, removed FROM eth.storage_cids
 						INNER JOIN eth.header_cids ON (
 							storage_cids.header_id = header_cids.block_hash
 							AND storage_cids.block_number = header_cids.block_number
@@ -25,3 +25,18 @@ const (
 						ORDER BY header_cids.block_number DESC
 						LIMIT 1`
 )
+
+// StorageSlotResult struct for unpacking GetStorageSlot result
+type StorageSlotResult struct {
+	Value       string `db:"val"`
+	Removed     bool   `db:"removed"`
+}
+
+// StateAccountResult struct for unpacking GetStateAccount result
+type StateAccountResult struct {
+	Balance     string `db:"balance"`
+	Nonce       uint64 `db:"nonce"`
+	CodeHash    []byte `db:"code_hash"`
+	StorageRoot string `db:"storage_root"`
+	Removed     bool   `db:"removed"`
+}
