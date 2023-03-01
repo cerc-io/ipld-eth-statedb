@@ -6,11 +6,10 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/metrics"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -247,7 +246,7 @@ func (s *stateObject) setBalance(amount *big.Int) {
 // Attribute accessors
 //
 
-// Returns the address of the contract/account
+// Address returns the address of the contract/account
 func (s *stateObject) Address() common.Address {
 	return s.address
 }
