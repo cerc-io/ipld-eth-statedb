@@ -88,7 +88,7 @@ type StateDB struct {
 	StorageReads time.Duration
 }
 
-// New creates a new state from a given trie.
+// New creates a new StateDB on the state for the provided blockHash
 func New(blockHash common.Hash, db Database) (*StateDB, error) {
 	sdb := &StateDB{
 		db:                  db,

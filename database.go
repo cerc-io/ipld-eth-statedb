@@ -3,14 +3,18 @@ package ipld_eth_statedb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
+
+	"github.com/ipfs/go-cid"
+	"github.com/multiformats/go-multihash"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/jackc/pgx/pgxpool"
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 const (
@@ -44,10 +48,14 @@ type stateDatabase struct {
 }
 
 // NewStateDatabase returns a new Database implementation using the provided postgres connection pool
-func NewStateDatabase(pgdb *pgxpool.Pool) (*stateDatabase, error) {
+func NewStateDatabase(ctx context.Context, conf Config) (*stateDatabase, error) {
+	pgDb, err := NewPGXPool(ctx, conf)
+	if err != nil {
+		return nil, err
+	}
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &stateDatabase{
-		pgdb:          pgdb,
+		pgdb:          pgDb,
 		codeSizeCache: csc,
 		codeCache:     fastcache.New(codeCacheSize),
 	}, nil
@@ -58,9 +66,12 @@ func (sd *stateDatabase) ContractCode(_, codeHash common.Hash) ([]byte, error) {
 	if code := sd.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
 		return code, nil
 	}
-	cid := ipld.Keccak256ToCid(ipld.RawBinary, codeHash.Bytes())
+	c, err := keccak256ToCid(ipld.RawBinary, codeHash.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("cannot derive CID from provided codehash: %s", err.Error())
+	}
 	code := make([]byte, 0)
-	if err := sd.pgdb.QueryRow(context.Background(), GetContractCodePgStr, cid).Scan(&code); err != nil {
+	if err := sd.pgdb.QueryRow(context.Background(), GetContractCodePgStr, c).Scan(&code); err != nil {
 		return nil, errNotFound
 	}
 	if len(code) > 0 {
@@ -113,4 +124,12 @@ func (sd *stateDatabase) StorageValue(addressHash, slotHash, blockHash common.Ha
 		return nil, nil
 	}
 	return res.Value, nil
+}
+
+func keccak256ToCid(codec uint64, h []byte) (cid.Cid, error) {
+	buf, err := multihash.Encode(h, multihash.KECCAK_256)
+	if err != nil {
+		return cid.Cid{}, err
+	}
+	return cid.NewCidV1(codec, buf), nil
 }

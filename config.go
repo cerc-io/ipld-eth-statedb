@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/jackc/pgx/pgxpool"
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 type Config struct {
@@ -22,7 +22,7 @@ type Config struct {
 }
 
 // NewPGXPool returns a new pgx conn pool
-func (c Config) NewPGXPool(ctx context.Context, config Config) (*pgxpool.Pool, error) {
+func NewPGXPool(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 	pgConf, err := makePGXConfig(config)
 	if err != nil {
 		return nil, err
