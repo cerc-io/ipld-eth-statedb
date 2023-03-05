@@ -332,7 +332,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		s.AccountReads += time.Since(start)
 	}
 	if err != nil {
-		s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
+		s.setError(fmt.Errorf("getDeletedStateObject (%x) error: %w", addr.Bytes(), err))
 		return nil
 	}
 	if data == nil {

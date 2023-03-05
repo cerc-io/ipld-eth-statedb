@@ -94,7 +94,8 @@ func (sd *stateDatabase) ContractCodeSize(_, codeHash common.Hash) (int, error) 
 // StateAccount satisfies Database, it returns the types.StateAccount for a provided address and block hash
 func (sd *stateDatabase) StateAccount(addressHash, blockHash common.Hash) (*types.StateAccount, error) {
 	res := StateAccountResult{}
-	err := sd.pgdb.QueryRow(context.Background(), GetStateAccount, addressHash.Hex(), blockHash.Hex()).Scan(&res)
+	err := sd.pgdb.QueryRow(context.Background(), GetStateAccount, addressHash.Hex(), blockHash.Hex()).
+		Scan(&res.Balance, &res.Nonce, &res.CodeHash, &res.StorageRoot, &res.Removed)
 	if err != nil {
 		return nil, errNotFound
 	}
@@ -108,14 +109,16 @@ func (sd *stateDatabase) StateAccount(addressHash, blockHash common.Hash) (*type
 		Nonce:    res.Nonce,
 		Balance:  bal,
 		Root:     common.HexToHash(res.StorageRoot),
-		CodeHash: res.CodeHash,
+		CodeHash: common.HexToHash(res.CodeHash).Bytes(),
 	}, nil
 }
 
 // StorageValue satisfies Database, it returns the storage value for the provided address, slot, and block hash
 func (sd *stateDatabase) StorageValue(addressHash, slotHash, blockHash common.Hash) ([]byte, error) {
 	res := StorageSlotResult{}
-	err := sd.pgdb.QueryRow(context.Background(), GetStorageSlot, addressHash.Hex(), slotHash.Hex(), blockHash.Hex()).Scan(&res)
+	err := sd.pgdb.QueryRow(context.Background(), GetStorageSlot,
+		addressHash.Hex(), slotHash.Hex(), blockHash.Hex()).
+		Scan(&res.Value, &res.Removed)
 	if err != nil {
 		return nil, errNotFound
 	}
