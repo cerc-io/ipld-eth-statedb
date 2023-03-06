@@ -1,7 +1,7 @@
 package ipld_eth_statedb
 
 const (
-	GetContractCodePgStr = `SELECT data FROM public.blocks WHERE key = $1`
+	GetContractCodePgStr = `SELECT data FROM ipld.blocks WHERE key = $1`
 	GetStateAccount      = `SELECT balance, nonce, code_hash, storage_root, removed FROM eth.state_cids
 						INNER JOIN eth.header_cids ON (
 							state_cids.header_id = header_cids.block_hash
@@ -39,7 +39,7 @@ type StorageSlotResult struct {
 type StateAccountResult struct {
 	Balance     string `db:"balance"`
 	Nonce       uint64 `db:"nonce"`
-	CodeHash    []byte `db:"code_hash"`
+	CodeHash    string `db:"code_hash"`
 	StorageRoot string `db:"storage_root"`
 	Removed     bool   `db:"removed"`
 }
