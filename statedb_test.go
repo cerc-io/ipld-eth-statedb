@@ -96,11 +96,11 @@ func TestSuite(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("Database", func(t *testing.T) {
-		size, err := db.ContractCodeSize(AccountAddress.Hash(), AccountCodeHash)
+		size, err := db.ContractCodeSize(AccountCodeHash)
 		require.NoError(t, err)
 		require.Equal(t, len(AccountCode), size)
 
-		code, err := db.ContractCode(AccountAddress.Hash(), AccountCodeHash)
+		code, err := db.ContractCode(AccountCodeHash)
 		require.NoError(t, err)
 		require.Equal(t, AccountCode, code)
 

@@ -32,8 +32,8 @@ var (
 // Database interface is a union of the subset of the geth state.Database interface required
 // to support the vm.StateDB implementation as well as methods specific to this Postgres based implementation
 type Database interface {
-	ContractCode(addrHash common.Hash, codeHash common.Hash) ([]byte, error)
-	ContractCodeSize(addrHash common.Hash, codeHash common.Hash) (int, error)
+	ContractCode(codeHash common.Hash) ([]byte, error)
+	ContractCodeSize(codeHash common.Hash) (int, error)
 	StateAccount(addressHash, blockHash common.Hash) (*types.StateAccount, error)
 	StorageValue(addressHash, slotHash, blockHash common.Hash) ([]byte, error)
 }
@@ -66,7 +66,7 @@ func NewStateDatabase(ctx context.Context, conf Config) (*stateDatabase, error) 
 }
 
 // ContractCode satisfies Database, it returns the contract code for a given codehash
-func (sd *stateDatabase) ContractCode(_, codeHash common.Hash) ([]byte, error) {
+func (sd *stateDatabase) ContractCode(codeHash common.Hash) ([]byte, error) {
 	if code := sd.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
 		return code, nil
 	}
@@ -87,11 +87,11 @@ func (sd *stateDatabase) ContractCode(_, codeHash common.Hash) ([]byte, error) {
 }
 
 // ContractCodeSize satisfies Database, it returns the length of the code for a provided codehash
-func (sd *stateDatabase) ContractCodeSize(_, codeHash common.Hash) (int, error) {
+func (sd *stateDatabase) ContractCodeSize(codeHash common.Hash) (int, error) {
 	if cached, ok := sd.codeSizeCache.Get(codeHash); ok {
 		return cached.(int), nil
 	}
-	code, err := sd.ContractCode(common.Hash{}, codeHash)
+	code, err := sd.ContractCode(codeHash)
 	return len(code), err
 }
 
