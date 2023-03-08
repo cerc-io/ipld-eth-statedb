@@ -123,11 +123,11 @@ func (sd *stateDatabase) StorageValue(addressHash, slotHash, blockHash common.Ha
 	res := StorageSlotResult{}
 	err := sd.pgdb.QueryRow(context.Background(), GetStorageSlot,
 		addressHash.Hex(), slotHash.Hex(), blockHash.Hex()).
-		Scan(&res.Value, &res.Removed)
+		Scan(&res.Value, &res.Removed, &res.StateLeafRemoved)
 	if err != nil {
 		return nil, err
 	}
-	if res.Removed {
+	if res.Removed || res.StateLeafRemoved {
 		// TODO: check expected behavior for deleted/non existing accounts
 		return nil, nil
 	}
