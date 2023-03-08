@@ -31,8 +31,8 @@ var (
 	// block four: non-canonical block with non-canonical slot value is added to the database
 	// block five: entire contract is destructed; another non-canonical block is created but it doesn't include an update for our slot
 	// but it links back to the other non-canonical header (this is to test the ability to resolve canonicity by comparing how many
-	// children reference back to a header
-	// block six: canonical block only, no relevant state changes (check that we returned emptied result at heights where it wasn't emptied)
+	// children reference back to a header)
+	// block six: canonical block only, no relevant state changes (check that we still return emptied result at heights where it wasn't emptied)
 	BlockNumber     = big.NewInt(1337)
 	Header          = types.Header{Number: BlockNumber}
 	BlockHash       = Header.Hash()
@@ -48,9 +48,9 @@ var (
 	BlockNumber6    = BlockNumber.Uint64() + 5
 	BlockParentHash = common.HexToHash("0123456701234567012345670123456701234567012345670123456701234567")
 
-	NonCanonicalHash4 = crypto.Keccak256Hash([]byte("I am a random non canonical hash"))
+	NonCanonicalHash4        = crypto.Keccak256Hash([]byte("I am a random non canonical hash"))
 	NonCanonicalBlockNumber4 = BlockNumber4
-	NonCanonicalHash5 = crypto.Keccak256Hash([]byte("I am also a random non canonical hash"))
+	NonCanonicalHash5        = crypto.Keccak256Hash([]byte("I am also a random non canonical hash"))
 	NonCanonicalBlockNumber5 = BlockNumber5
 
 	AccountPK, _   = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -77,12 +77,11 @@ var (
 	AccountCID, _        = ipld.RawdataToCid(ipld.MEthStateTrie, accountAndLeafRLP, multihash.KECCAK_256)
 	AccountCodeCID, _    = util.Keccak256ToCid(ipld.RawBinary, AccountCodeHash.Bytes())
 
-	StoredValueRLP, _  = rlp.EncodeToBytes(StoredValue)
-	StoredValueRLP2, _ = rlp.EncodeToBytes("something")
+	StoredValueRLP, _         = rlp.EncodeToBytes(StoredValue)
+	StoredValueRLP2, _        = rlp.EncodeToBytes("something")
 	NonCanonStoredValueRLP, _ = rlp.EncodeToBytes("something else")
-	StorageRLP, _      = rlp.EncodeToBytes(&[]interface{}{StoragePartialPath, StoredValueRLP})
-	StorageCID, _      = ipld.RawdataToCid(ipld.MEthStorageTrie, StorageRLP, multihash.KECCAK_256)
-
+	StorageRLP, _             = rlp.EncodeToBytes(&[]interface{}{StoragePartialPath, StoredValueRLP})
+	StorageCID, _             = ipld.RawdataToCid(ipld.MEthStorageTrie, StorageRLP, multihash.KECCAK_256)
 
 	RemovedNodeStateCID   = "baglacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
 	RemovedNodeStorageCID = "bagmacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
@@ -132,6 +131,18 @@ func TestSuite(t *testing.T) {
 		Removed:     false,
 	}))
 	require.NoError(t, insertStateCID(pool, stateModel{
+		BlockNumber: NonCanonicalBlockNumber4,
+		BlockHash:   BlockHash4.String(),
+		LeafKey:     AccountLeafKey.String(),
+		CID:         AccountCID.String(),
+		Diff:        true,
+		Balance:     Account.Balance.Uint64(),
+		Nonce:       Account.Nonce,
+		CodeHash:    AccountCodeHash.String(),
+		StorageRoot: Account.Root.String(),
+		Removed:     false,
+	}))
+	require.NoError(t, insertStateCID(pool, stateModel{
 		BlockNumber: BlockNumber5,
 		BlockHash:   BlockHash5.String(),
 		LeafKey:     AccountLeafKey.String(),
@@ -169,6 +180,7 @@ func TestSuite(t *testing.T) {
 		Value:          StoredValueRLP2,
 		Removed:        false,
 	}))
+	// TODO: Add the state account records for every storage update, since updatign storage necessarily means the state account was updated to
 	require.NoError(t, insertStorageCID(pool, storageModel{
 		BlockNumber:    BlockNumber4,
 		BlockHash:      NonCanonicalHash4.String(),
@@ -205,6 +217,7 @@ func TestSuite(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, &Account, acct3)
 
+		// check that we don't get the non-canonical account
 		acct4, err := db.StateAccount(AccountLeafKey, BlockHash4)
 		require.NoError(t, err)
 		require.Equal(t, &Account, acct4)
@@ -234,9 +247,7 @@ func TestSuite(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, StoredValueRLP2, val4)
 
-		// TODO: how is this still returning StoredValueRLP2 when the account was destructed?
-		// it was working before we added non-canonical blocks, so must be related
-		// somehow  the non-canonical records are messing up the ability to determine is a state account is removed
+		// this checks that when the entire account was deleted, we return nil result for storage slot
 		val5, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash5)
 		require.NoError(t, err)
 		require.Nil(t, val5)
@@ -300,7 +311,6 @@ func insertHeaderCID(db *pgxpool.Pool, blockHash, parentHash string, blockNumber
 	if err != nil {
 		return err
 	}
-	println(cid.String())
 	sql := `INSERT INTO eth.header_cids (
 	block_number,
 	block_hash,
