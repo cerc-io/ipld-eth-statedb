@@ -25,6 +25,14 @@ var (
 	testCtx = context.Background()
 
 	// Fixture data
+	// block one: contract account and slot are created
+	// block two: slot is emptied
+	// block three: slot has a new value added
+	// block four: non-canonical block with non-canonical slot value is added to the database
+	// block five: entire contract is destructed; another non-canonical block is created but it doesn't include an update for our slot
+	// but it links back to the other non-canonical header (this is to test the ability to resolve canonicity by comparing how many
+	// children reference back to a header
+	// block six: canonical block only, no relevant state changes (check that we returned emptied result at heights where it wasn't emptied)
 	BlockNumber     = big.NewInt(1337)
 	Header          = types.Header{Number: BlockNumber}
 	BlockHash       = Header.Hash()
@@ -36,7 +44,14 @@ var (
 	BlockNumber4    = BlockNumber.Uint64() + 3
 	BlockHash5      = crypto.Keccak256Hash([]byte("I"))
 	BlockNumber5    = BlockNumber.Uint64() + 4
+	BlockHash6      = crypto.Keccak256Hash([]byte("am"))
+	BlockNumber6    = BlockNumber.Uint64() + 5
 	BlockParentHash = common.HexToHash("0123456701234567012345670123456701234567012345670123456701234567")
+
+	NonCanonicalHash4 = crypto.Keccak256Hash([]byte("I am a random non canonical hash"))
+	NonCanonicalBlockNumber4 = BlockNumber4
+	NonCanonicalHash5 = crypto.Keccak256Hash([]byte("I am also a random non canonical hash"))
+	NonCanonicalBlockNumber5 = BlockNumber5
 
 	AccountPK, _   = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 	AccountAddress = crypto.PubkeyToAddress(AccountPK.PublicKey) //0x703c4b2bD70c169f5717101CaeE543299Fc946C7
@@ -57,9 +72,6 @@ var (
 	StoragePartialPath = []byte{0, 1, 0, 2, 0, 4}
 
 	// Encoded data
-	headerRLP, _ = rlp.EncodeToBytes(&Header)
-	HeaderCID, _ = ipld.RawdataToCid(ipld.MEthStateTrie, headerRLP, multihash.KECCAK_256)
-
 	accountRLP, _        = rlp.EncodeToBytes(&Account)
 	accountAndLeafRLP, _ = rlp.EncodeToBytes(&[]interface{}{AccountLeafKey, accountRLP})
 	AccountCID, _        = ipld.RawdataToCid(ipld.MEthStateTrie, accountAndLeafRLP, multihash.KECCAK_256)
@@ -67,8 +79,10 @@ var (
 
 	StoredValueRLP, _  = rlp.EncodeToBytes(StoredValue)
 	StoredValueRLP2, _ = rlp.EncodeToBytes("something")
+	NonCanonStoredValueRLP, _ = rlp.EncodeToBytes("something else")
 	StorageRLP, _      = rlp.EncodeToBytes(&[]interface{}{StoragePartialPath, StoredValueRLP})
 	StorageCID, _      = ipld.RawdataToCid(ipld.MEthStorageTrie, StorageRLP, multihash.KECCAK_256)
+
 
 	RemovedNodeStateCID   = "baglacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
 	RemovedNodeStorageCID = "bagmacgzayxjemamg64rtzet6pwznzrydydsqbnstzkbcoo337lmaixmfurya"
@@ -97,12 +111,14 @@ func TestSuite(t *testing.T) {
 		}
 		require.NoError(t, tx.Commit(testCtx))
 	})
-
-	require.NoError(t, insertHeaderCID(pool, BlockHash.String(), BlockNumber.Uint64()))
-	require.NoError(t, insertHeaderCID(pool, BlockHash2.String(), BlockNumber2))
-	require.NoError(t, insertHeaderCID(pool, BlockHash3.String(), BlockNumber3))
-	require.NoError(t, insertHeaderCID(pool, BlockHash4.String(), BlockNumber4))
-	require.NoError(t, insertHeaderCID(pool, BlockHash5.String(), BlockNumber5))
+	require.NoError(t, insertHeaderCID(pool, BlockHash.String(), BlockParentHash.String(), BlockNumber.Uint64()))
+	require.NoError(t, insertHeaderCID(pool, BlockHash2.String(), BlockHash.String(), BlockNumber2))
+	require.NoError(t, insertHeaderCID(pool, BlockHash3.String(), BlockHash2.String(), BlockNumber3))
+	require.NoError(t, insertHeaderCID(pool, BlockHash4.String(), BlockHash3.String(), BlockNumber4))
+	require.NoError(t, insertHeaderCID(pool, NonCanonicalHash4.String(), BlockHash3.String(), NonCanonicalBlockNumber4))
+	require.NoError(t, insertHeaderCID(pool, BlockHash5.String(), BlockHash4.String(), BlockNumber5))
+	require.NoError(t, insertHeaderCID(pool, NonCanonicalHash5.String(), NonCanonicalHash4.String(), NonCanonicalBlockNumber5))
+	require.NoError(t, insertHeaderCID(pool, BlockHash6.String(), BlockHash5.String(), BlockNumber6))
 	require.NoError(t, insertStateCID(pool, stateModel{
 		BlockNumber: BlockNumber.Uint64(),
 		BlockHash:   BlockHash.String(),
@@ -153,6 +169,16 @@ func TestSuite(t *testing.T) {
 		Value:          StoredValueRLP2,
 		Removed:        false,
 	}))
+	require.NoError(t, insertStorageCID(pool, storageModel{
+		BlockNumber:    BlockNumber4,
+		BlockHash:      NonCanonicalHash4.String(),
+		LeafKey:        AccountLeafKey.String(),
+		StorageLeafKey: StorageLeafKey.String(),
+		StorageCID:     StorageCID.String(),
+		Diff:           true,
+		Value:          NonCanonStoredValueRLP,
+		Removed:        false,
+	}))
 	require.NoError(t, insertContractCode(pool))
 
 	db, err := statedb.NewStateDatabaseWithPool(pool)
@@ -187,6 +213,10 @@ func TestSuite(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, acct5)
 
+		acct6, err := db.StateAccount(AccountLeafKey, BlockHash6)
+		require.NoError(t, err)
+		require.Nil(t, acct6)
+
 		val, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash)
 		require.NoError(t, err)
 		require.Equal(t, StoredValueRLP, val)
@@ -199,13 +229,21 @@ func TestSuite(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, StoredValueRLP2, val3)
 
+		// this checks that we don't get the non-canonical result
 		val4, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash4)
 		require.NoError(t, err)
 		require.Equal(t, StoredValueRLP2, val4)
 
+		// TODO: how is this still returning StoredValueRLP2 when the account was destructed?
+		// it was working before we added non-canonical blocks, so must be related
+		// somehow  the non-canonical records are messing up the ability to determine is a state account is removed
 		val5, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash5)
 		require.NoError(t, err)
 		require.Nil(t, val5)
+
+		val6, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash6)
+		require.NoError(t, err)
+		require.Nil(t, val6)
 	})
 
 	t.Run("StateDB", func(t *testing.T) {
@@ -257,7 +295,12 @@ func TestSuite(t *testing.T) {
 	})
 }
 
-func insertHeaderCID(db *pgxpool.Pool, blockHash string, blockNumber uint64) error {
+func insertHeaderCID(db *pgxpool.Pool, blockHash, parentHash string, blockNumber uint64) error {
+	cid, err := util.Keccak256ToCid(ipld.MEthHeader, common.HexToHash(blockHash).Bytes())
+	if err != nil {
+		return err
+	}
+	println(cid.String())
 	sql := `INSERT INTO eth.header_cids (
 	block_number,
 	block_hash,
@@ -274,11 +317,11 @@ func insertHeaderCID(db *pgxpool.Pool, blockHash string, blockNumber uint64) err
 	timestamp,
 	coinbase
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
-	_, err := db.Exec(testCtx, sql,
+	_, err = db.Exec(testCtx, sql,
 		blockNumber,
 		blockHash,
-		BlockParentHash.String(),
-		HeaderCID.String(),
+		parentHash,
+		cid.String(),
 		0, []string{}, 0,
 		Header.Root.String(),
 		Header.TxHash.String(),
