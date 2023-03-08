@@ -28,10 +28,14 @@ var (
 	BlockNumber     = big.NewInt(1337)
 	Header          = types.Header{Number: BlockNumber}
 	BlockHash       = Header.Hash()
-	RandomHash      = crypto.Keccak256Hash([]byte("I am a random hash"))
-	RandomHash2     = crypto.Keccak256Hash([]byte("I am another random hash"))
-	RandomHash3     = crypto.Keccak256Hash([]byte("I am"))
-	RandomHash4     = crypto.Keccak256Hash([]byte("I"))
+	BlockHash2      = crypto.Keccak256Hash([]byte("I am a random hash"))
+	BlockNumber2    = BlockNumber.Uint64() + 1
+	BlockHash3      = crypto.Keccak256Hash([]byte("I am another random hash"))
+	BlockNumber3    = BlockNumber.Uint64() + 2
+	BlockHash4      = crypto.Keccak256Hash([]byte("I am"))
+	BlockNumber4    = BlockNumber.Uint64() + 3
+	BlockHash5      = crypto.Keccak256Hash([]byte("I"))
+	BlockNumber5    = BlockNumber.Uint64() + 4
 	BlockParentHash = common.HexToHash("0123456701234567012345670123456701234567012345670123456701234567")
 
 	AccountPK, _   = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -95,10 +99,10 @@ func TestSuite(t *testing.T) {
 	})
 
 	require.NoError(t, insertHeaderCID(pool, BlockHash.String(), BlockNumber.Uint64()))
-	require.NoError(t, insertHeaderCID(pool, RandomHash.String(), BlockNumber.Uint64()+1))
-	require.NoError(t, insertHeaderCID(pool, RandomHash2.String(), BlockNumber.Uint64()+2))
-	require.NoError(t, insertHeaderCID(pool, RandomHash3.String(), BlockNumber.Uint64()+3))
-	require.NoError(t, insertHeaderCID(pool, RandomHash4.String(), BlockNumber.Uint64()+4))
+	require.NoError(t, insertHeaderCID(pool, BlockHash2.String(), BlockNumber2))
+	require.NoError(t, insertHeaderCID(pool, BlockHash3.String(), BlockNumber3))
+	require.NoError(t, insertHeaderCID(pool, BlockHash4.String(), BlockNumber4))
+	require.NoError(t, insertHeaderCID(pool, BlockHash5.String(), BlockNumber5))
 	require.NoError(t, insertStateCID(pool, stateModel{
 		BlockNumber: BlockNumber.Uint64(),
 		BlockHash:   BlockHash.String(),
@@ -112,10 +116,10 @@ func TestSuite(t *testing.T) {
 		Removed:     false,
 	}))
 	require.NoError(t, insertStateCID(pool, stateModel{
-		BlockNumber: BlockNumber.Uint64() + 4,
-		BlockHash:   RandomHash4.String(),
+		BlockNumber: BlockNumber5,
+		BlockHash:   BlockHash5.String(),
 		LeafKey:     AccountLeafKey.String(),
-		CID:         RemovedNodeStorageCID,
+		CID:         RemovedNodeStateCID,
 		Diff:        true,
 		Removed:     true,
 	}))
@@ -130,18 +134,18 @@ func TestSuite(t *testing.T) {
 		Removed:        false,
 	}))
 	require.NoError(t, insertStorageCID(pool, storageModel{
-		BlockNumber:    BlockNumber.Uint64() + 1,
-		BlockHash:      RandomHash.String(),
+		BlockNumber:    BlockNumber2,
+		BlockHash:      BlockHash2.String(),
 		LeafKey:        AccountLeafKey.String(),
 		StorageLeafKey: StorageLeafKey.String(),
-		StorageCID:     RemovedNodeStateCID,
+		StorageCID:     RemovedNodeStorageCID,
 		Diff:           true,
 		Value:          []byte{},
 		Removed:        true,
 	}))
 	require.NoError(t, insertStorageCID(pool, storageModel{
-		BlockNumber:    BlockNumber.Uint64() + 2,
-		BlockHash:      RandomHash2.String(),
+		BlockNumber:    BlockNumber3,
+		BlockHash:      BlockHash3.String(),
 		LeafKey:        AccountLeafKey.String(),
 		StorageLeafKey: StorageLeafKey.String(),
 		StorageCID:     StorageCID.String(),
@@ -167,41 +171,41 @@ func TestSuite(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, &Account, acct)
 
-		acct2, err := db.StateAccount(AccountLeafKey, RandomHash)
+		acct2, err := db.StateAccount(AccountLeafKey, BlockHash2)
 		require.NoError(t, err)
 		require.Equal(t, &Account, acct2)
 
-		acct3, err := db.StateAccount(AccountLeafKey, RandomHash2)
+		acct3, err := db.StateAccount(AccountLeafKey, BlockHash3)
 		require.NoError(t, err)
 		require.Equal(t, &Account, acct3)
 
-		acct4, err := db.StateAccount(AccountLeafKey, RandomHash3)
+		acct4, err := db.StateAccount(AccountLeafKey, BlockHash4)
 		require.NoError(t, err)
 		require.Equal(t, &Account, acct4)
 
-		acct5, err := db.StateAccount(AccountLeafKey, RandomHash4)
+		acct5, err := db.StateAccount(AccountLeafKey, BlockHash5)
 		require.NoError(t, err)
-		require.Equal(t, (*types.StateAccount)(nil), acct5)
+		require.Nil(t, acct5)
 
 		val, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash)
 		require.NoError(t, err)
 		require.Equal(t, StoredValueRLP, val)
 
-		val2, err := db.StorageValue(AccountLeafKey, StorageLeafKey, RandomHash)
+		val2, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash2)
 		require.NoError(t, err)
-		require.Equal(t, ([]byte)(nil), val2)
+		require.Nil(t, val2)
 
-		val3, err := db.StorageValue(AccountLeafKey, StorageLeafKey, RandomHash2)
+		val3, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash3)
 		require.NoError(t, err)
 		require.Equal(t, StoredValueRLP2, val3)
 
-		val4, err := db.StorageValue(AccountLeafKey, StorageLeafKey, RandomHash3)
+		val4, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash4)
 		require.NoError(t, err)
 		require.Equal(t, StoredValueRLP2, val4)
 
-		val5, err := db.StorageValue(AccountLeafKey, StorageLeafKey, RandomHash4)
+		val5, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash5)
 		require.NoError(t, err)
-		require.Equal(t, ([]byte)(nil), val5)
+		require.Nil(t, val5)
 	})
 
 	t.Run("StateDB", func(t *testing.T) {
@@ -279,7 +283,7 @@ func insertHeaderCID(db *pgxpool.Pool, blockHash string, blockNumber uint64) err
 		Header.Root.String(),
 		Header.TxHash.String(),
 		Header.ReceiptHash.String(),
-		common.HexToHash("0").String(),
+		Header.UncleHash.String(),
 		[]byte{},
 		Header.Time,
 		Header.Coinbase.String(),
