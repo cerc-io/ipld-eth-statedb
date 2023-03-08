@@ -30,7 +30,8 @@ var (
 	BlockHash       = Header.Hash()
 	RandomHash      = crypto.Keccak256Hash([]byte("I am a random hash"))
 	RandomHash2     = crypto.Keccak256Hash([]byte("I am another random hash"))
-	RandomHash3     = crypto.Keccak256Hash([]byte("I"))
+	RandomHash3     = crypto.Keccak256Hash([]byte("I am"))
+	RandomHash4     = crypto.Keccak256Hash([]byte("I"))
 	BlockParentHash = common.HexToHash("0123456701234567012345670123456701234567012345670123456701234567")
 
 	AccountPK, _   = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -97,6 +98,7 @@ func TestSuite(t *testing.T) {
 	require.NoError(t, insertHeaderCID(pool, RandomHash.String(), BlockNumber.Uint64()+1))
 	require.NoError(t, insertHeaderCID(pool, RandomHash2.String(), BlockNumber.Uint64()+2))
 	require.NoError(t, insertHeaderCID(pool, RandomHash3.String(), BlockNumber.Uint64()+3))
+	require.NoError(t, insertHeaderCID(pool, RandomHash4.String(), BlockNumber.Uint64()+4))
 	require.NoError(t, insertStateCID(pool, stateModel{
 		BlockNumber: BlockNumber.Uint64(),
 		BlockHash:   BlockHash.String(),
@@ -110,8 +112,8 @@ func TestSuite(t *testing.T) {
 		Removed:     false,
 	}))
 	require.NoError(t, insertStateCID(pool, stateModel{
-		BlockNumber: BlockNumber.Uint64() + 3,
-		BlockHash:   RandomHash3.String(),
+		BlockNumber: BlockNumber.Uint64() + 4,
+		BlockHash:   RandomHash4.String(),
 		LeafKey:     AccountLeafKey.String(),
 		CID:         RemovedNodeStorageCID,
 		Diff:        true,
@@ -147,16 +149,6 @@ func TestSuite(t *testing.T) {
 		Value:          StoredValueRLP2,
 		Removed:        false,
 	}))
-	require.NoError(t, insertStorageCID(pool, storageModel{
-		BlockNumber:    BlockNumber.Uint64() + 3,
-		BlockHash:      RandomHash3.String(),
-		LeafKey:        AccountLeafKey.String(),
-		StorageLeafKey: StorageLeafKey.String(),
-		StorageCID:     RemovedNodeStateCID,
-		Diff:           true,
-		Value:          []byte{},
-		Removed:        true,
-	}))
 	require.NoError(t, insertContractCode(pool))
 
 	db, err := statedb.NewStateDatabaseWithPool(pool)
@@ -185,7 +177,11 @@ func TestSuite(t *testing.T) {
 
 		acct4, err := db.StateAccount(AccountLeafKey, RandomHash3)
 		require.NoError(t, err)
-		require.Equal(t, (*types.StateAccount)(nil), acct4)
+		require.Equal(t, &Account, acct4)
+
+		acct5, err := db.StateAccount(AccountLeafKey, RandomHash4)
+		require.NoError(t, err)
+		require.Equal(t, (*types.StateAccount)(nil), acct5)
 
 		val, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash)
 		require.NoError(t, err)
@@ -201,7 +197,11 @@ func TestSuite(t *testing.T) {
 
 		val4, err := db.StorageValue(AccountLeafKey, StorageLeafKey, RandomHash3)
 		require.NoError(t, err)
-		require.Equal(t, ([]byte)(nil), val4)
+		require.Equal(t, StoredValueRLP2, val4)
+
+		val5, err := db.StorageValue(AccountLeafKey, StorageLeafKey, RandomHash4)
+		require.NoError(t, err)
+		require.Equal(t, ([]byte)(nil), val5)
 	})
 
 	t.Run("StateDB", func(t *testing.T) {
