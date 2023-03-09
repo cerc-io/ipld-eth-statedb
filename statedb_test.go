@@ -48,10 +48,8 @@ var (
 	BlockNumber6    = BlockNumber.Uint64() + 5
 	BlockParentHash = common.HexToHash("0123456701234567012345670123456701234567012345670123456701234567")
 
-	NonCanonicalHash4        = crypto.Keccak256Hash([]byte("I am a random non canonical hash"))
-	NonCanonicalBlockNumber4 = BlockNumber4
-	NonCanonicalHash5        = crypto.Keccak256Hash([]byte("I am also a random non canonical hash"))
-	NonCanonicalBlockNumber5 = BlockNumber5
+	NonCanonicalHash4 = crypto.Keccak256Hash([]byte("I am a random non canonical hash"))
+	NonCanonicalHash5 = crypto.Keccak256Hash([]byte("I am also a random non canonical hash"))
 
 	AccountPK, _   = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 	AccountAddress = crypto.PubkeyToAddress(AccountPK.PublicKey) //0x703c4b2bD70c169f5717101CaeE543299Fc946C7
@@ -114,9 +112,9 @@ func TestSuite(t *testing.T) {
 	require.NoError(t, insertHeaderCID(pool, BlockHash2.String(), BlockHash.String(), BlockNumber2))
 	require.NoError(t, insertHeaderCID(pool, BlockHash3.String(), BlockHash2.String(), BlockNumber3))
 	require.NoError(t, insertHeaderCID(pool, BlockHash4.String(), BlockHash3.String(), BlockNumber4))
-	require.NoError(t, insertHeaderCID(pool, NonCanonicalHash4.String(), BlockHash3.String(), NonCanonicalBlockNumber4))
+	require.NoError(t, insertHeaderCID(pool, NonCanonicalHash4.String(), BlockHash3.String(), BlockNumber4))
 	require.NoError(t, insertHeaderCID(pool, BlockHash5.String(), BlockHash4.String(), BlockNumber5))
-	require.NoError(t, insertHeaderCID(pool, NonCanonicalHash5.String(), NonCanonicalHash4.String(), NonCanonicalBlockNumber5))
+	require.NoError(t, insertHeaderCID(pool, NonCanonicalHash5.String(), NonCanonicalHash4.String(), BlockNumber5))
 	require.NoError(t, insertHeaderCID(pool, BlockHash6.String(), BlockHash5.String(), BlockNumber6))
 	require.NoError(t, insertStateCID(pool, stateModel{
 		BlockNumber: BlockNumber.Uint64(),
@@ -131,12 +129,12 @@ func TestSuite(t *testing.T) {
 		Removed:     false,
 	}))
 	require.NoError(t, insertStateCID(pool, stateModel{
-		BlockNumber: NonCanonicalBlockNumber4,
-		BlockHash:   BlockHash4.String(),
+		BlockNumber: BlockNumber4,
+		BlockHash:   NonCanonicalHash4.String(),
 		LeafKey:     AccountLeafKey.String(),
 		CID:         AccountCID.String(),
 		Diff:        true,
-		Balance:     Account.Balance.Uint64(),
+		Balance:     big.NewInt(123).Uint64(),
 		Nonce:       Account.Nonce,
 		CodeHash:    AccountCodeHash.String(),
 		StorageRoot: Account.Root.String(),
@@ -180,7 +178,6 @@ func TestSuite(t *testing.T) {
 		Value:          StoredValueRLP2,
 		Removed:        false,
 	}))
-	// TODO: Add the state account records for every storage update, since updatign storage necessarily means the state account was updated to
 	require.NoError(t, insertStorageCID(pool, storageModel{
 		BlockNumber:    BlockNumber4,
 		BlockHash:      NonCanonicalHash4.String(),
