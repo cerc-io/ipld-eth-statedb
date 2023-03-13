@@ -133,7 +133,7 @@ func (s *stateObject) touch() {
 }
 
 // GetState retrieves a value from the account storage trie.
-func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
+func (s *stateObject) GetState(db StateDatabase, key common.Hash) common.Hash {
 	// If the fake storage is set, only lookup the state here(in the debugging mode)
 	if s.fakeStorage != nil {
 		return s.fakeStorage[key]
@@ -148,7 +148,7 @@ func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
 }
 
 // GetCommittedState retrieves a value from the committed account storage trie.
-func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Hash {
+func (s *stateObject) GetCommittedState(db StateDatabase, key common.Hash) common.Hash {
 	// If the fake storage is set, only lookup the state here(in the debugging mode)
 	if s.fakeStorage != nil {
 		return s.fakeStorage[key]
@@ -183,7 +183,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 }
 
 // SetState updates a value in account storage.
-func (s *stateObject) SetState(db Database, key, value common.Hash) {
+func (s *stateObject) SetState(db StateDatabase, key, value common.Hash) {
 	// If the fake storage is set, put the temporary state update here.
 	if s.fakeStorage != nil {
 		s.fakeStorage[key] = value
@@ -270,7 +270,7 @@ func (s *stateObject) Address() common.Address {
 }
 
 // Code returns the contract code associated with this object, if any.
-func (s *stateObject) Code(db Database) []byte {
+func (s *stateObject) Code(db StateDatabase) []byte {
 	if s.code != nil {
 		return s.code
 	}
@@ -288,7 +288,7 @@ func (s *stateObject) Code(db Database) []byte {
 // CodeSize returns the size of the contract code associated with this object,
 // or zero if none. This method is an almost mirror of Code, but uses a cache
 // inside the database to avoid loading codes seen recently.
-func (s *stateObject) CodeSize(db Database) int {
+func (s *stateObject) CodeSize(db StateDatabase) int {
 	if s.code != nil {
 		return len(s.code)
 	}

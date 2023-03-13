@@ -46,7 +46,7 @@ type revision struct {
 // * Contracts
 // * Accounts
 type StateDB struct {
-	db     Database
+	db     StateDatabase
 	hasher crypto.KeccakState
 
 	// originBlockHash is the blockhash for the state we are working on top of
@@ -89,7 +89,7 @@ type StateDB struct {
 }
 
 // New creates a new StateDB on the state for the provided blockHash
-func New(blockHash common.Hash, db Database) (*StateDB, error) {
+func New(blockHash common.Hash, db StateDatabase) (*StateDB, error) {
 	sdb := &StateDB{
 		db:                  db,
 		originBlockHash:     blockHash,
