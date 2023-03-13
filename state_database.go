@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/VictoriaMetrics/fastcache"
+	lru "github.com/hashicorp/golang-lru"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/jmoiron/sqlx"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
-	lru "github.com/hashicorp/golang-lru"
-	"github.com/jackc/pgx/v4/pgxpool"
 
 	util "github.com/cerc-io/ipld-eth-statedb/internal"
 )

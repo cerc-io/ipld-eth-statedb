@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/lib/pq"
-
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
