@@ -2,9 +2,13 @@ package ipld_eth_statedb
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jmoiron/sqlx"
+
+	_ "github.com/lib/pq"
 )
 
 type Config struct {
@@ -19,6 +23,20 @@ type Config struct {
 	MinConns        int
 	MaxConnLifetime time.Duration
 	MaxConnIdleTime time.Duration
+	MaxIdle         int
+}
+
+// DbConnectionString constructs and returns the connection string from the config (for sqlx driver)
+func (c Config) DbConnectionString() string {
+	if len(c.Username) > 0 && len(c.Password) > 0 {
+		return fmt.Sprintf("postgresql://%s:%s@%s:%d/%s?sslmode=disable",
+			c.Username, c.Password, c.Hostname, c.Port, c.DatabaseName)
+	}
+	if len(c.Username) > 0 && len(c.Password) == 0 {
+		return fmt.Sprintf("postgresql://%s@%s:%d/%s?sslmode=disable",
+			c.Username, c.Hostname, c.Port, c.DatabaseName)
+	}
+	return fmt.Sprintf("postgresql://%s:%d/%s?sslmode=disable", c.Hostname, c.Port, c.DatabaseName)
 }
 
 // NewPGXPool returns a new pgx conn pool
@@ -28,6 +46,15 @@ func NewPGXPool(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 	return pgxpool.ConnectConfig(ctx, pgConf)
+}
+
+// NewSQLXPool returns a new sqlx conn pool
+func NewSQLXPool(ctx context.Context, config Config) (*sqlx.DB, error) {
+	db, err := sqlx.ConnectContext(ctx, "postgres", config.DbConnectionString())
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
 }
 
 // makePGXConfig creates a pgxpool.Config from the provided Config
