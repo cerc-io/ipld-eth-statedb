@@ -8,12 +8,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// BuildAndReportKeySetWithBranchToDepth takes a depth argument
-// and returns the first two slots (that when hashed into trie keys) that intersect at or below that provided depth
-// it hashes the slots and converts to nibbles before finding the intersection
-// it also returns the nibble and hex string representations of the two intersecting keys
-// this is useful for identifying what contract slots need to be occupied to cause branching in the storage trie
-// at or below a provided height
+// BuildAndReportKeySetWithBranchToDepth takes a depth argument and returns
+// the first two slots that (when hashed into trie keys) intersect at or below the provided depth.
+// It then hashes the slots and converts to nibbles before finding their intersection.
+// It also returns the nibble and hex string representations of the two intersecting keys.
+// This is useful for identifying what contract slots need to be occupied to cause branching in the storage trie
+// at or below a provided height.
 func BuildAndReportKeySetWithBranchToDepth(depth int) (string, string, []byte, []byte, string, string) {
 	slots, storageLeafKeys, storageLeafKeyStrs, key1, key2 := buildKeySetWithBranchToDepth(depth)
 	var slot1 string
