@@ -72,6 +72,12 @@ func NewEmpty(db *Database) *Trie {
 	return tr
 }
 
+// NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
+// the key after the given start key.
+func (t *Trie) NodeIterator(start []byte) NodeIterator {
+	return newNodeIterator(t, start)
+}
+
 // TryGet returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 // If a node was not found in the database, a MissingNodeError is returned.
@@ -129,6 +135,17 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 	}
 	if node != nil {
 		return node, nil
+	}
+	return nil, &MissingNodeError{Owner: t.owner, NodeHash: n, Path: prefix}
+}
+
+// resolveHash loads rlp-encoded node blob from the underlying database
+// with the provided node hash and path prefix.
+func (t *Trie) resolveBlob(n hashNode, prefix []byte) ([]byte, error) {
+	cid := ipld.Keccak256ToCid(t.codec, n)
+	blob, _ := t.db.Node(cid.Bytes())
+	if len(blob) != 0 {
+		return blob, nil
 	}
 	return nil, &MissingNodeError{Owner: t.owner, NodeHash: n, Path: prefix}
 }
