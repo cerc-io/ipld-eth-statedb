@@ -114,14 +114,11 @@ func updateTrie(tr *geth_trie.Trie, vals []kvs) (kvMap, error) {
 }
 
 func commitTrie(t *testing.T, db *geth_trie.Database, tr *geth_trie.Trie) common.Hash {
-	root, nodes, err := tr.Commit(false)
-	if err != nil {
-		t.Fatalf("Failed to commit trie %v", err)
-	}
-	if err = db.Update(geth_trie.NewWithNodeSet(nodes)); err != nil {
+	root, nodes := tr.Commit(false)
+	if err := db.Update(geth_trie.NewWithNodeSet(nodes)); err != nil {
 		t.Fatal(err)
 	}
-	if err = db.Commit(root, false, nil); err != nil {
+	if err := db.Commit(root, false); err != nil {
 		t.Fatal(err)
 	}
 	return root
@@ -129,6 +126,7 @@ func commitTrie(t *testing.T, db *geth_trie.Database, tr *geth_trie.Trie) common
 
 // commit a LevelDB state trie, index to IPLD and return new trie
 func indexTrie(t *testing.T, edb ethdb.Database, root common.Hash) *trie.Trie {
+	dbConfig.Driver = postgres.PGX
 	err := helper.IndexChain(dbConfig, geth_state.NewDatabase(edb), common.Hash{}, root)
 	if err != nil {
 		t.Fatal(err)
