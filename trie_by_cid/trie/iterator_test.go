@@ -35,10 +35,10 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/test_helpers"
 	geth_trie "github.com/ethereum/go-ethereum/trie"
 
-	"github.com/cerc-io/ipfs-ethdb/v5/postgres/v0"
-	"github.com/cerc-io/ipld-eth-utils/bycid/state"
-	"github.com/cerc-io/ipld-eth-utils/bycid/trie"
-	"github.com/cerc-io/ipld-eth-utils/helper"
+	pgipfsethdb "github.com/cerc-io/ipfs-ethdb/v5/postgres/v0"
+	"github.com/cerc-io/ipld-eth-statedb/trie_by_cid/helper"
+	"github.com/cerc-io/ipld-eth-statedb/trie_by_cid/state"
+	"github.com/cerc-io/ipld-eth-statedb/trie_by_cid/trie"
 )
 
 type kvs struct {

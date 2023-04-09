@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 	lru "github.com/hashicorp/golang-lru"
 
-	"github.com/cerc-io/ipld-eth-utils/bycid/trie"
+	"github.com/cerc-io/ipld-eth-statedb/trie_by_cid/trie"
 )
 
 const (
