@@ -101,6 +101,12 @@ func (t *StateTrie) Hash() common.Hash {
 	return t.trie.Hash()
 }
 
+// NodeIterator returns an iterator that returns nodes of the underlying trie. Iteration
+// starts at the key after the given start key.
+func (t *StateTrie) NodeIterator(start []byte) NodeIterator {
+	return t.trie.NodeIterator(start)
+}
+
 // hashKey returns the hash of key as an ephemeral buffer.
 // The caller must not hold onto the return value because it will become
 // invalid on the next call to hashKey or secKey.

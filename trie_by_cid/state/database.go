@@ -44,7 +44,7 @@ type Trie interface {
 	TryGet(key []byte) ([]byte, error)
 	TryGetAccount(key []byte) (*types.StateAccount, error)
 	Hash() common.Hash
-	// NodeIterator(startKey []byte) trie.NodeIterator
+	NodeIterator(startKey []byte) trie.NodeIterator
 	Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error
 }
 
