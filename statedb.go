@@ -15,23 +15,20 @@ import (
 )
 
 /*
-The portions of the EVM we want to leverage only use the following methods:
+   The portions of the EVM we want to leverage only use the following methods
+   (The rest can be left with panics for now):
 
-GetBalance
-Snapshot
-Exist
-CreateAccount
-SubBalance
-AddBalance
-GetCode
-GetCodeHash
-RevertToSnapshot
-GetNonce
-SetNonce
-AddAddressToAccessList
-SetCode
-
-The rest can be left with panics for now
+   * Exist
+   * CreateAccount
+   * GetCodeHash
+   * AddAddressToAccessList
+   * {Get,Set}Nonce
+   * {Get,Set,Add,Sub}Balance
+   * {Get,Set}Code
+   * {Get,Set}State
+   * {Get,Set}TransientState
+   * Snapshot
+   * RevertToSnapshot
 */
 
 var _ vm.StateDB = &StateDB{}

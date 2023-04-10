@@ -154,9 +154,6 @@ func (s *stateObject) GetCommittedState(db StateDatabase, key common.Hash) commo
 		return s.fakeStorage[key]
 	}
 	// If we have a pending write or clean cached, return that
-	if value, pending := s.pendingStorage[key]; pending {
-		return value
-	}
 	if value, cached := s.originStorage[key]; cached {
 		return value
 	}
