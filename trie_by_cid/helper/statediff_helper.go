@@ -15,28 +15,14 @@ import (
 )
 
 var (
-	// ChainDB     = rawdb.NewMemoryDatabase()
 	ChainConfig = params.TestChainConfig
-	// BankFunds   = new(big.Int).Mul(big.NewInt(1e4), big.NewInt(params.Ether)) // i.e. 10,000eth
 
 	mockTD = big.NewInt(1)
-	// ctx    = context.Background()
-	// signer = types.NewLondonSigner(ChainConfig.ChainID)
 )
 
 func IndexChain(dbConfig postgres.Config, stateCache state.Database, rootA, rootB common.Hash) error {
 	_, indexer, err := indexer.NewStateDiffIndexer(
-		context.Background(),
-		ChainConfig,
-		node.Info{},
-		// node.Info{
-		// 	GenesisBlock: Genesis.Hash().String(),
-		// 	NetworkID:    "test_network",
-		// 	ID:           "test_node",
-		// 	ClientName:   "geth",
-		// 	ChainID:      ChainConfig.ChainID.Uint64(),
-		// },
-		dbConfig)
+		context.Background(), ChainConfig, node.Info{}, dbConfig)
 	if err != nil {
 		return err
 	}
@@ -50,8 +36,6 @@ func IndexChain(dbConfig postgres.Config, stateCache state.Database, rootA, root
 	args := statediff.Args{
 		OldStateRoot: rootA,
 		NewStateRoot: rootB,
-		// BlockNumber:  block.Number(),
-		// BlockHash:    block.Hash(),
 	}
 	diff, err := builder.BuildStateDiffObject(args, statediff.Params{})
 	if err != nil {
@@ -73,9 +57,4 @@ func IndexChain(dbConfig postgres.Config, stateCache state.Database, rootA, root
 		}
 	}
 	return tx.Submit(err)
-
-	// if err = tx.Submit(err); err != nil {
-	// 	return err
-	// }
-	// return nil
 }

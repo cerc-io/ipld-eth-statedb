@@ -24,7 +24,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie"
 )
+
+var VerifyProof = trie.VerifyProof
+var VerifyRangeProof = trie.VerifyRangeProof
 
 // Prove constructs a merkle proof for key. The result contains all encoded nodes
 // on the path to the value at key. The value itself is also included in the last
@@ -102,35 +106,6 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) e
 func (t *StateTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
 	return t.trie.Prove(key, fromLevel, proofDb)
 }
-
-// // VerifyProof checks merkle proofs. The given proof must contain the value for
-// // key in a trie with the given root hash. VerifyProof returns an error if the
-// // proof contains invalid trie nodes or the wrong value.
-// func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.KeyValueReader) (value []byte, err error) {
-// 	key = keybytesToHex(key)
-// 	wantHash := rootHash
-// 	for i := 0; ; i++ {
-// 		buf, _ := proofDb.Get(wantHash[:])
-// 		if buf == nil {
-// 			return nil, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash)
-// 		}
-// 		n, err := decodeNode(wantHash[:], buf)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("bad proof node %d: %v", i, err)
-// 		}
-// 		keyrest, cld := get(n, key, true)
-// 		switch cld := cld.(type) {
-// 		case nil:
-// 			// The trie doesn't contain the key.
-// 			return nil, nil
-// 		case hashNode:
-// 			key = keyrest
-// 			copy(wantHash[:], cld)
-// 		case valueNode:
-// 			return cld, nil
-// 		}
-// 	}
-// }
 
 // proofToPath converts a merkle proof to trie node path. The main purpose of
 // this function is recovering a node path from the merkle proof stream. All
