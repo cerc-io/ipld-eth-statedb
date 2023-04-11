@@ -10,3 +10,9 @@ Postgres IPLD blockstore in the "public.blocks" table) and access state and stor
 
 Note: "IPFS" is chosen in the name of "ipfs-ethdb" as it can function through an IPFS BlockService abstraction or directly ontop of an IPLD blockstore, whereas this repository
 is very tightly coupled to the schema in ipld-eth-db.
+
+The top-level package contains the implementation of the `vm.StateDB` interface that accesses state directly using the
+`state_cids` and `storage_cids` tables in ipld-eth-db. The `trie_by_cid` package contains an alternative implementation
+which accesses state in `ipld.blocks` through the typical trie traversal access pattern (using CIDs instead of raw
+keccak256 hashes), it is used for benchmarking and for functionality which requires performing a trie traversal
+(things which must collect intermediate nodes, e.g. `eth_getProof` and `eth_getSlice`).
