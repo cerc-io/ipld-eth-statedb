@@ -3,8 +3,6 @@ package ipld_eth_statedb_test
 import (
 	"context"
 	"math/big"
-	"os"
-	"strconv"
 	"testing"
 
 	"github.com/lib/pq"
@@ -15,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 
 	statedb "github.com/cerc-io/ipld-eth-statedb"
@@ -86,17 +85,12 @@ var (
 )
 
 func TestPGXSuite(t *testing.T) {
-	testConfig, err := getTestConfig()
+	testConfig, err := postgres.DefaultConfig.WithEnv()
 	require.NoError(t, err)
-	pool, err := statedb.NewPGXPool(testCtx, testConfig)
+	pool, err := postgres.ConnectPGX(testCtx, testConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
-	driver, err := statedb.NewPGXDriverFromPool(context.Background(), pool)
-	if err != nil {
-		t.Fatal(err)
-	}
-	database := statedb.NewPostgresDB(driver)
 	t.Cleanup(func() {
 		tx, err := pool.Begin(testCtx)
 		require.NoError(t, err)
@@ -112,213 +106,26 @@ func TestPGXSuite(t *testing.T) {
 		}
 		require.NoError(t, tx.Commit(testCtx))
 	})
-	require.NoError(t, insertHeaderCID(database, BlockHash.String(), BlockParentHash.String(), BlockNumber.Uint64()))
-	require.NoError(t, insertHeaderCID(database, BlockHash2.String(), BlockHash.String(), BlockNumber2))
-	require.NoError(t, insertHeaderCID(database, BlockHash3.String(), BlockHash2.String(), BlockNumber3))
-	require.NoError(t, insertHeaderCID(database, BlockHash4.String(), BlockHash3.String(), BlockNumber4))
-	require.NoError(t, insertHeaderCID(database, NonCanonicalHash4.String(), BlockHash3.String(), BlockNumber4))
-	require.NoError(t, insertHeaderCID(database, BlockHash5.String(), BlockHash4.String(), BlockNumber5))
-	require.NoError(t, insertHeaderCID(database, NonCanonicalHash5.String(), NonCanonicalHash4.String(), BlockNumber5))
-	require.NoError(t, insertHeaderCID(database, BlockHash6.String(), BlockHash5.String(), BlockNumber6))
-	require.NoError(t, insertStateCID(database, stateModel{
-		BlockNumber: BlockNumber.Uint64(),
-		BlockHash:   BlockHash.String(),
-		LeafKey:     AccountLeafKey.String(),
-		CID:         AccountCID.String(),
-		Diff:        true,
-		Balance:     Account.Balance.Uint64(),
-		Nonce:       Account.Nonce,
-		CodeHash:    AccountCodeHash.String(),
-		StorageRoot: Account.Root.String(),
-		Removed:     false,
-	}))
-	require.NoError(t, insertStateCID(database, stateModel{
-		BlockNumber: BlockNumber4,
-		BlockHash:   NonCanonicalHash4.String(),
-		LeafKey:     AccountLeafKey.String(),
-		CID:         AccountCID.String(),
-		Diff:        true,
-		Balance:     big.NewInt(123).Uint64(),
-		Nonce:       Account.Nonce,
-		CodeHash:    AccountCodeHash.String(),
-		StorageRoot: Account.Root.String(),
-		Removed:     false,
-	}))
-	require.NoError(t, insertStateCID(database, stateModel{
-		BlockNumber: BlockNumber5,
-		BlockHash:   BlockHash5.String(),
-		LeafKey:     AccountLeafKey.String(),
-		CID:         RemovedNodeStateCID,
-		Diff:        true,
-		Removed:     true,
-	}))
-	require.NoError(t, insertStorageCID(database, storageModel{
-		BlockNumber:    BlockNumber.Uint64(),
-		BlockHash:      BlockHash.String(),
-		LeafKey:        AccountLeafKey.String(),
-		StorageLeafKey: StorageLeafKey.String(),
-		StorageCID:     StorageCID.String(),
-		Diff:           true,
-		Value:          StoredValueRLP,
-		Removed:        false,
-	}))
-	require.NoError(t, insertStorageCID(database, storageModel{
-		BlockNumber:    BlockNumber2,
-		BlockHash:      BlockHash2.String(),
-		LeafKey:        AccountLeafKey.String(),
-		StorageLeafKey: StorageLeafKey.String(),
-		StorageCID:     RemovedNodeStorageCID,
-		Diff:           true,
-		Value:          []byte{},
-		Removed:        true,
-	}))
-	require.NoError(t, insertStorageCID(database, storageModel{
-		BlockNumber:    BlockNumber3,
-		BlockHash:      BlockHash3.String(),
-		LeafKey:        AccountLeafKey.String(),
-		StorageLeafKey: StorageLeafKey.String(),
-		StorageCID:     StorageCID.String(),
-		Diff:           true,
-		Value:          StoredValueRLP2,
-		Removed:        false,
-	}))
-	require.NoError(t, insertStorageCID(database, storageModel{
-		BlockNumber:    BlockNumber4,
-		BlockHash:      NonCanonicalHash4.String(),
-		LeafKey:        AccountLeafKey.String(),
-		StorageLeafKey: StorageLeafKey.String(),
-		StorageCID:     StorageCID.String(),
-		Diff:           true,
-		Value:          NonCanonStoredValueRLP,
-		Removed:        false,
-	}))
-	require.NoError(t, insertContractCode(database))
 
-	db, err := statedb.NewStateDatabaseWithPgxPool(pool)
-	require.NoError(t, err)
-
-	t.Run("Database", func(t *testing.T) {
-		size, err := db.ContractCodeSize(AccountCodeHash)
-		require.NoError(t, err)
-		require.Equal(t, len(AccountCode), size)
-
-		code, err := db.ContractCode(AccountCodeHash)
-		require.NoError(t, err)
-		require.Equal(t, AccountCode, code)
-
-		acct, err := db.StateAccount(AccountLeafKey, BlockHash)
-		require.NoError(t, err)
-		require.Equal(t, &Account, acct)
-
-		acct2, err := db.StateAccount(AccountLeafKey, BlockHash2)
-		require.NoError(t, err)
-		require.Equal(t, &Account, acct2)
-
-		acct3, err := db.StateAccount(AccountLeafKey, BlockHash3)
-		require.NoError(t, err)
-		require.Equal(t, &Account, acct3)
-
-		// check that we don't get the non-canonical account
-		acct4, err := db.StateAccount(AccountLeafKey, BlockHash4)
-		require.NoError(t, err)
-		require.Equal(t, &Account, acct4)
-
-		acct5, err := db.StateAccount(AccountLeafKey, BlockHash5)
-		require.NoError(t, err)
-		require.Nil(t, acct5)
-
-		acct6, err := db.StateAccount(AccountLeafKey, BlockHash6)
-		require.NoError(t, err)
-		require.Nil(t, acct6)
-
-		val, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash)
-		require.NoError(t, err)
-		require.Equal(t, StoredValueRLP, val)
-
-		val2, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash2)
-		require.NoError(t, err)
-		require.Nil(t, val2)
-
-		val3, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash3)
-		require.NoError(t, err)
-		require.Equal(t, StoredValueRLP2, val3)
-
-		// this checks that we don't get the non-canonical result
-		val4, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash4)
-		require.NoError(t, err)
-		require.Equal(t, StoredValueRLP2, val4)
-
-		// this checks that when the entire account was deleted, we return nil result for storage slot
-		val5, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash5)
-		require.NoError(t, err)
-		require.Nil(t, val5)
-
-		val6, err := db.StorageValue(AccountLeafKey, StorageLeafKey, BlockHash6)
-		require.NoError(t, err)
-		require.Nil(t, val6)
-	})
-
-	t.Run("StateDB", func(t *testing.T) {
-		sdb, err := statedb.New(BlockHash, db)
-		require.NoError(t, err)
-
-		checkAccountUnchanged := func() {
-			require.Equal(t, Account.Balance, sdb.GetBalance(AccountAddress))
-			require.Equal(t, Account.Nonce, sdb.GetNonce(AccountAddress))
-			require.Equal(t, StoredValue, sdb.GetState(AccountAddress, StorageLeafKey))
-			require.Equal(t, AccountCodeHash, sdb.GetCodeHash(AccountAddress))
-			require.Equal(t, AccountCode, sdb.GetCode(AccountAddress))
-			require.Equal(t, len(AccountCode), sdb.GetCodeSize(AccountAddress))
-		}
-
-		require.True(t, sdb.Exist(AccountAddress))
-		checkAccountUnchanged()
-
-		id := sdb.Snapshot()
-
-		newStorage := crypto.Keccak256Hash([]byte{5, 4, 3, 2, 1})
-		newCode := []byte{1, 3, 3, 7}
-
-		sdb.SetBalance(AccountAddress, big.NewInt(300))
-		sdb.AddBalance(AccountAddress, big.NewInt(200))
-		sdb.SubBalance(AccountAddress, big.NewInt(100))
-		sdb.SetNonce(AccountAddress, 42)
-		sdb.SetState(AccountAddress, StorageLeafKey, newStorage)
-		sdb.SetCode(AccountAddress, newCode)
-
-		require.Equal(t, big.NewInt(400), sdb.GetBalance(AccountAddress))
-		require.Equal(t, uint64(42), sdb.GetNonce(AccountAddress))
-		require.Equal(t, newStorage, sdb.GetState(AccountAddress, StorageLeafKey))
-		require.Equal(t, newCode, sdb.GetCode(AccountAddress))
-
-		sdb.AddSlotToAccessList(AccountAddress, StorageLeafKey)
-		require.True(t, sdb.AddressInAccessList(AccountAddress))
-		hasAddr, hasSlot := sdb.SlotInAccessList(AccountAddress, StorageLeafKey)
-		require.True(t, hasAddr)
-		require.True(t, hasSlot)
-
-		sdb.RevertToSnapshot(id)
-
-		checkAccountUnchanged()
-		require.False(t, sdb.AddressInAccessList(AccountAddress))
-		hasAddr, hasSlot = sdb.SlotInAccessList(AccountAddress, StorageLeafKey)
-		require.False(t, hasAddr)
-		require.False(t, hasSlot)
-	})
-}
-
-func TestSQLXSuite(t *testing.T) {
-	testConfig, err := getTestConfig()
-	require.NoError(t, err)
-	pool, err := statedb.NewSQLXPool(testCtx, testConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-	driver, err := statedb.NewSQLXDriverFromPool(context.Background(), pool)
+	driver, err := statedb.NewPGXDriverFromPool(context.Background(), pool)
 	if err != nil {
 		t.Fatal(err)
 	}
 	database := statedb.NewPostgresDB(driver)
+	insertSuiteData(t, database)
+
+	db := statedb.NewStateDatabase(database)
+	require.NoError(t, err)
+	testSuite(t, db)
+}
+
+func TestSQLXSuite(t *testing.T) {
+	testConfig, err := postgres.DefaultConfig.WithEnv()
+	require.NoError(t, err)
+	pool, err := postgres.ConnectSQLX(testCtx, testConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() {
 		tx, err := pool.Begin()
 		require.NoError(t, err)
@@ -334,6 +141,20 @@ func TestSQLXSuite(t *testing.T) {
 		}
 		require.NoError(t, tx.Commit())
 	})
+
+	driver, err := statedb.NewSQLXDriverFromPool(context.Background(), pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	database := statedb.NewPostgresDB(driver)
+	insertSuiteData(t, database)
+
+	db := statedb.NewStateDatabase(database)
+	require.NoError(t, err)
+	testSuite(t, db)
+}
+
+func insertSuiteData(t *testing.T, database statedb.Database) {
 	require.NoError(t, insertHeaderCID(database, BlockHash.String(), BlockParentHash.String(), BlockNumber.Uint64()))
 	require.NoError(t, insertHeaderCID(database, BlockHash2.String(), BlockHash.String(), BlockNumber2))
 	require.NoError(t, insertHeaderCID(database, BlockHash3.String(), BlockHash2.String(), BlockNumber3))
@@ -415,10 +236,9 @@ func TestSQLXSuite(t *testing.T) {
 		Removed:        false,
 	}))
 	require.NoError(t, insertContractCode(database))
+}
 
-	db, err := statedb.NewStateDatabaseWithSqlxPool(pool)
-	require.NoError(t, err)
-
+func testSuite(t *testing.T, db statedb.StateDatabase) {
 	t.Run("Database", func(t *testing.T) {
 		size, err := db.ContractCodeSize(AccountCodeHash)
 		require.NoError(t, err)
@@ -647,18 +467,4 @@ func insertContractCode(db statedb.Database) error {
 	sql := `INSERT INTO ipld.blocks (block_number, key, data) VALUES ($1, $2, $3)`
 	_, err := db.Exec(testCtx, sql, BlockNumber.Uint64(), AccountCodeCID.String(), AccountCode)
 	return err
-}
-
-func getTestConfig() (conf statedb.Config, err error) {
-	port, err := strconv.Atoi(os.Getenv("DATABASE_PORT"))
-	if err != nil {
-		return
-	}
-	return statedb.Config{
-		Hostname:     os.Getenv("DATABASE_HOSTNAME"),
-		DatabaseName: os.Getenv("DATABASE_NAME"),
-		Username:     os.Getenv("DATABASE_USER"),
-		Password:     os.Getenv("DATABASE_PASSWORD"),
-		Port:         port,
-	}, nil
 }
