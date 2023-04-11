@@ -8,8 +8,6 @@ import (
 
 	"github.com/VictoriaMetrics/fastcache"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/jmoiron/sqlx"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -48,24 +46,14 @@ type stateDatabase struct {
 	codeCache     *fastcache.Cache
 }
 
-// NewStateDatabaseWithPgxPool returns a new Database implementation using the provided postgres connection pool
-func NewStateDatabaseWithPgxPool(pgDb *pgxpool.Pool) (*stateDatabase, error) {
+// NewStateDatabase returns a new Database implementation using the passed parameters
+func NewStateDatabase(db Database) *stateDatabase {
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &stateDatabase{
-		db:            NewPostgresDB(&PGXDriver{db: pgDb}),
+		db:            db,
 		codeSizeCache: csc,
 		codeCache:     fastcache.New(codeCacheSize),
-	}, nil
-}
-
-// NewStateDatabaseWithSqlxPool returns a new Database implementation using the passed parameters
-func NewStateDatabaseWithSqlxPool(db *sqlx.DB) (*stateDatabase, error) {
-	csc, _ := lru.New(codeSizeCacheSize)
-	return &stateDatabase{
-		db:            NewPostgresDB(&SQLXDriver{db: db}),
-		codeSizeCache: csc,
-		codeCache:     fastcache.New(codeCacheSize),
-	}, nil
+	}
 }
 
 // ContractCode satisfies Database, it returns the contract code for a given codehash
