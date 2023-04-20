@@ -64,7 +64,8 @@ var (
 		Root:     common.Hash{},
 	}
 
-	StorageLeafKey     = crypto.Keccak256Hash(common.HexToHash("0").Bytes())
+	StorageSlot        = common.HexToHash("0")
+	StorageLeafKey     = crypto.Keccak256Hash(StorageSlot[:])
 	StoredValue        = crypto.Keccak256Hash([]byte{1, 2, 3, 4, 5})
 	StoragePartialPath = []byte{0, 1, 0, 2, 0, 4}
 
@@ -301,7 +302,7 @@ func testSuite(t *testing.T, db statedb.StateDatabase) {
 		checkAccountUnchanged := func() {
 			require.Equal(t, Account.Balance, sdb.GetBalance(AccountAddress))
 			require.Equal(t, Account.Nonce, sdb.GetNonce(AccountAddress))
-			require.Equal(t, StoredValue, sdb.GetState(AccountAddress, StorageLeafKey))
+			require.Equal(t, StoredValue, sdb.GetState(AccountAddress, StorageSlot))
 			require.Equal(t, AccountCodeHash, sdb.GetCodeHash(AccountAddress))
 			require.Equal(t, AccountCode, sdb.GetCode(AccountAddress))
 			require.Equal(t, len(AccountCode), sdb.GetCodeSize(AccountAddress))
@@ -319,17 +320,17 @@ func testSuite(t *testing.T, db statedb.StateDatabase) {
 		sdb.AddBalance(AccountAddress, big.NewInt(200))
 		sdb.SubBalance(AccountAddress, big.NewInt(100))
 		sdb.SetNonce(AccountAddress, 42)
-		sdb.SetState(AccountAddress, StorageLeafKey, newStorage)
+		sdb.SetState(AccountAddress, StorageSlot, newStorage)
 		sdb.SetCode(AccountAddress, newCode)
 
 		require.Equal(t, big.NewInt(400), sdb.GetBalance(AccountAddress))
 		require.Equal(t, uint64(42), sdb.GetNonce(AccountAddress))
-		require.Equal(t, newStorage, sdb.GetState(AccountAddress, StorageLeafKey))
+		require.Equal(t, newStorage, sdb.GetState(AccountAddress, StorageSlot))
 		require.Equal(t, newCode, sdb.GetCode(AccountAddress))
 
-		sdb.AddSlotToAccessList(AccountAddress, StorageLeafKey)
+		sdb.AddSlotToAccessList(AccountAddress, StorageSlot)
 		require.True(t, sdb.AddressInAccessList(AccountAddress))
-		hasAddr, hasSlot := sdb.SlotInAccessList(AccountAddress, StorageLeafKey)
+		hasAddr, hasSlot := sdb.SlotInAccessList(AccountAddress, StorageSlot)
 		require.True(t, hasAddr)
 		require.True(t, hasSlot)
 
@@ -337,7 +338,7 @@ func testSuite(t *testing.T, db statedb.StateDatabase) {
 
 		checkAccountUnchanged()
 		require.False(t, sdb.AddressInAccessList(AccountAddress))
-		hasAddr, hasSlot = sdb.SlotInAccessList(AccountAddress, StorageLeafKey)
+		hasAddr, hasSlot = sdb.SlotInAccessList(AccountAddress, StorageSlot)
 		require.False(t, hasAddr)
 		require.False(t, hasSlot)
 	})

@@ -159,7 +159,8 @@ func (s *stateObject) GetCommittedState(db StateDatabase, key common.Hash) commo
 	}
 	// If no live objects are available, load from database
 	start := time.Now()
-	enc, err := db.StorageValue(s.addrHash, key, s.blockHash)
+	keyHash := crypto.Keccak256Hash(key[:])
+	enc, err := db.StorageValue(s.addrHash, keyHash, s.blockHash)
 	if metrics.EnabledExpensive {
 		s.db.StorageReads += time.Since(start)
 	}
