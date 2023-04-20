@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
+	util "github.com/cerc-io/ipld-eth-statedb/internal"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 )
 
@@ -161,7 +162,11 @@ func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, new
 		if hash == nil {
 			return nil, origNode, 0, errors.New("non-consensus node")
 		}
-		blob, err := t.db.Node(hash)
+		cid, err := util.Keccak256ToCid(t.codec, hash)
+		if err != nil {
+			return nil, origNode, 0, err
+		}
+		blob, err := t.db.Node(cid)
 		return blob, origNode, 1, err
 	}
 	// Path still needs to be traversed, descend into children
@@ -206,8 +211,15 @@ func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, new
 // resolveHash loads node from the underlying database with the provided
 // node hash and path prefix.
 func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
-	cid := ipld.Keccak256ToCid(t.codec, n)
-	node, err := t.db.node(cid.Bytes())
+	cid, err := util.Keccak256ToCid(t.codec, n)
+	if err != nil {
+		return nil, err
+	}
+	enc, err := t.db.Node(cid)
+	if err != nil {
+		return nil, err
+	}
+	node, err := decodeNodeUnsafe(n, enc)
 	if err != nil {
 		return nil, err
 	}
@@ -220,8 +232,14 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 // resolveHash loads rlp-encoded node blob from the underlying database
 // with the provided node hash and path prefix.
 func (t *Trie) resolveBlob(n hashNode, prefix []byte) ([]byte, error) {
-	cid := ipld.Keccak256ToCid(t.codec, n)
-	blob, _ := t.db.Node(cid.Bytes())
+	cid, err := util.Keccak256ToCid(t.codec, n)
+	if err != nil {
+		return nil, err
+	}
+	blob, err := t.db.Node(cid)
+	if err != nil {
+		return nil, err
+	}
 	if len(blob) != 0 {
 		return blob, nil
 	}
@@ -231,20 +249,20 @@ func (t *Trie) resolveBlob(n hashNode, prefix []byte) ([]byte, error) {
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
 func (t *Trie) Hash() common.Hash {
-	hash, cached, _ := t.hashRoot()
+	hash, cached := t.hashRoot()
 	t.root = cached
 	return common.BytesToHash(hash.(hashNode))
 }
 
 // hashRoot calculates the root hash of the given trie
-func (t *Trie) hashRoot() (node, node, error) {
+func (t *Trie) hashRoot() (node, node) {
 	if t.root == nil {
-		return hashNode(emptyRoot.Bytes()), nil, nil
+		return hashNode(emptyRoot.Bytes()), nil
 	}
 	// If the number of changes is below 100, we let one thread handle it
 	h := newHasher(t.unhashed >= 100)
 	defer returnHasherToPool(h)
 	hashed, cached := h.hash(t.root, true)
 	t.unhashed = 0
-	return hashed, cached, nil
+	return hashed, cached
 }

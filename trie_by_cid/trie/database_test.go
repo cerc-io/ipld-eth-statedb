@@ -28,7 +28,7 @@ import (
 // to retrieve the meta root.
 func TestDatabaseMetarootFetch(t *testing.T) {
 	db := trie.NewDatabase(memorydb.New())
-	if _, err := db.Node(trie.CidBytes(nil)); err == nil {
+	if _, err := db.Node(trie.CidKey{}); err == nil {
 		t.Fatalf("metaroot retrieval succeeded")
 	}
 }
