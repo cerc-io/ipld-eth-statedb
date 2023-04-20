@@ -1,4 +1,4 @@
-package ipld_eth_statedb_test
+package state_test
 
 import (
 	"context"
@@ -16,8 +16,9 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 
-	statedb "github.com/cerc-io/ipld-eth-statedb"
+	state "github.com/cerc-io/ipld-eth-statedb/direct_by_leaf"
 	util "github.com/cerc-io/ipld-eth-statedb/internal"
+	"github.com/cerc-io/ipld-eth-statedb/sql"
 )
 
 var (
@@ -52,7 +53,7 @@ var (
 
 	AccountPK, _   = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 	AccountAddress = crypto.PubkeyToAddress(AccountPK.PublicKey) //0x703c4b2bD70c169f5717101CaeE543299Fc946C7
-	AccountLeafKey = crypto.Keccak256Hash(AccountAddress.Bytes())
+	AccountLeafKey = crypto.Keccak256Hash(AccountAddress[:])
 
 	AccountCode     = []byte{0, 1, 2, 3, 4, 5, 6, 7}
 	AccountCodeHash = crypto.Keccak256Hash(AccountCode)
@@ -73,7 +74,7 @@ var (
 	accountRLP, _        = rlp.EncodeToBytes(&Account)
 	accountAndLeafRLP, _ = rlp.EncodeToBytes(&[]interface{}{AccountLeafKey, accountRLP})
 	AccountCID, _        = ipld.RawdataToCid(ipld.MEthStateTrie, accountAndLeafRLP, multihash.KECCAK_256)
-	AccountCodeCID, _    = util.Keccak256ToCid(ipld.RawBinary, AccountCodeHash.Bytes())
+	AccountCodeCID, _    = util.Keccak256ToCid(ipld.RawBinary, AccountCodeHash[:])
 
 	StoredValueRLP, _         = rlp.EncodeToBytes(StoredValue)
 	StoredValueRLP2, _        = rlp.EncodeToBytes("something")
@@ -108,11 +109,10 @@ func TestPGXSuite(t *testing.T) {
 		require.NoError(t, tx.Commit(testCtx))
 	})
 
-	driver := statedb.NewPGXDriverFromPool(context.Background(), pool)
-	database := statedb.NewPostgresDB(driver)
+	database := sql.NewPGXDriverFromPool(context.Background(), pool)
 	insertSuiteData(t, database)
 
-	db := statedb.NewStateDatabase(database)
+	db := state.NewStateDatabase(database)
 	require.NoError(t, err)
 	testSuite(t, db)
 }
@@ -140,16 +140,15 @@ func TestSQLXSuite(t *testing.T) {
 		require.NoError(t, tx.Commit())
 	})
 
-	driver := statedb.NewSQLXDriverFromPool(context.Background(), pool)
-	database := statedb.NewPostgresDB(driver)
+	database := sql.NewSQLXDriverFromPool(context.Background(), pool)
 	insertSuiteData(t, database)
 
-	db := statedb.NewStateDatabase(database)
+	db := state.NewStateDatabase(database)
 	require.NoError(t, err)
 	testSuite(t, db)
 }
 
-func insertSuiteData(t *testing.T, database statedb.Database) {
+func insertSuiteData(t *testing.T, database sql.Database) {
 	require.NoError(t, insertHeaderCID(database, BlockHash.String(), BlockParentHash.String(), BlockNumber.Uint64()))
 	require.NoError(t, insertHeaderCID(database, BlockHash2.String(), BlockHash.String(), BlockNumber2))
 	require.NoError(t, insertHeaderCID(database, BlockHash3.String(), BlockHash2.String(), BlockNumber3))
@@ -233,7 +232,7 @@ func insertSuiteData(t *testing.T, database statedb.Database) {
 	require.NoError(t, insertContractCode(database))
 }
 
-func testSuite(t *testing.T, db statedb.StateDatabase) {
+func testSuite(t *testing.T, db state.StateDatabase) {
 	t.Run("Database", func(t *testing.T) {
 		size, err := db.ContractCodeSize(AccountCodeHash)
 		require.NoError(t, err)
@@ -296,7 +295,7 @@ func testSuite(t *testing.T, db statedb.StateDatabase) {
 	})
 
 	t.Run("StateDB", func(t *testing.T) {
-		sdb, err := statedb.New(BlockHash, db)
+		sdb, err := state.New(BlockHash, db)
 		require.NoError(t, err)
 
 		checkAccountUnchanged := func() {
@@ -344,7 +343,7 @@ func testSuite(t *testing.T, db statedb.StateDatabase) {
 	})
 }
 
-func insertHeaderCID(db statedb.Database, blockHash, parentHash string, blockNumber uint64) error {
+func insertHeaderCID(db sql.Database, blockHash, parentHash string, blockNumber uint64) error {
 	cid, err := util.Keccak256ToCid(ipld.MEthHeader, common.HexToHash(blockHash).Bytes())
 	if err != nil {
 		return err
@@ -395,7 +394,7 @@ type stateModel struct {
 	Removed     bool
 }
 
-func insertStateCID(db statedb.Database, cidModel stateModel) error {
+func insertStateCID(db sql.Database, cidModel stateModel) error {
 	sql := `INSERT INTO eth.state_cids (
 	block_number,
 	header_id,
@@ -434,7 +433,7 @@ type storageModel struct {
 	Removed        bool
 }
 
-func insertStorageCID(db statedb.Database, cidModel storageModel) error {
+func insertStorageCID(db sql.Database, cidModel storageModel) error {
 	sql := `INSERT INTO eth.storage_cids (
 	block_number,
 	header_id,
@@ -458,7 +457,7 @@ func insertStorageCID(db statedb.Database, cidModel storageModel) error {
 	return err
 }
 
-func insertContractCode(db statedb.Database) error {
+func insertContractCode(db sql.Database) error {
 	sql := `INSERT INTO ipld.blocks (block_number, key, data) VALUES ($1, $2, $3)`
 	_, err := db.Exec(testCtx, sql, BlockNumber.Uint64(), AccountCodeCID.String(), AccountCode)
 	return err

@@ -1,4 +1,4 @@
-package ipld_eth_statedb
+package state
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 
 	util "github.com/cerc-io/ipld-eth-statedb/internal"
+	"github.com/cerc-io/ipld-eth-statedb/sql"
 )
 
 const (
@@ -41,13 +42,13 @@ type StateDatabase interface {
 var _ StateDatabase = &stateDatabase{}
 
 type stateDatabase struct {
-	db            Database
+	db            sql.Database
 	codeSizeCache *lru.Cache
 	codeCache     *fastcache.Cache
 }
 
 // NewStateDatabase returns a new Database implementation using the passed parameters
-func NewStateDatabase(db Database) *stateDatabase {
+func NewStateDatabase(db sql.Database) *stateDatabase {
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &stateDatabase{
 		db:            db,

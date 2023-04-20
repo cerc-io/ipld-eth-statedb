@@ -1,4 +1,4 @@
-package ipld_eth_statedb
+package sql
 
 import (
 	"context"
