@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 
@@ -169,4 +170,13 @@ func TearDownDB(db *sqlx.DB) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// returns a cache config with unique name (groupcache names are global)
+func makeCacheConfig(t testing.TB) pgipfsethdb.CacheConfig {
+	return pgipfsethdb.CacheConfig{
+		Name:           t.Name(),
+		Size:           3000000, // 3MB
+		ExpiryDuration: time.Hour,
+	}
 }

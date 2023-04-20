@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	geth_trie "github.com/ethereum/go-ethereum/trie"
@@ -41,18 +42,26 @@ var (
 	trieConfig  = trie.Config{Cache: 256}
 
 	ctx = context.Background()
-)
 
-var testdata1 = []kvs{
-	{"barb", 0},
-	{"bard", 1},
-	{"bars", 2},
-	{"bar", 3},
-	{"fab", 4},
-	{"food", 5},
-	{"foos", 6},
-	{"foo", 7},
-}
+	testdata0 = []kvs{
+		{"one", 1},
+		{"two", 2},
+		{"three", 3},
+		{"four", 4},
+		{"five", 5},
+		{"ten", 10},
+	}
+	testdata1 = []kvs{
+		{"barb", 0},
+		{"bard", 1},
+		{"bars", 2},
+		{"bar", 3},
+		{"fab", 4},
+		{"food", 5},
+		{"foos", 6},
+		{"foo", 7},
+	}
+)
 
 func TestEmptyIterator(t *testing.T) {
 	trie := trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase()))
@@ -71,15 +80,7 @@ func TestIterator(t *testing.T) {
 	edb := rawdb.NewMemoryDatabase()
 	db := geth_trie.NewDatabase(edb)
 	origtrie := geth_trie.NewEmpty(db)
-	vals := []kvs{
-		{"one", 1},
-		{"two", 2},
-		{"three", 3},
-		{"four", 4},
-		{"five", 5},
-		{"ten", 10},
-	}
-	all, err := updateTrie(origtrie, vals)
+	all, err := updateTrie(origtrie, testdata0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,22 +102,6 @@ func TestIterator(t *testing.T) {
 			t.Errorf("iterator value mismatch for %s: got %q want %q", k, found[k], kv.v)
 		}
 	}
-}
-
-func checkIteratorOrder(want []kvs, it *trie.Iterator) error {
-	for it.Next() {
-		if len(want) == 0 {
-			return fmt.Errorf("didn't expect any more values, got key %q", it.Key)
-		}
-		if !bytes.Equal(it.Key, []byte(want[0].k)) {
-			return fmt.Errorf("wrong key: got %q, want %q", it.Key, want[0].k)
-		}
-		want = want[1:]
-	}
-	if len(want) > 0 {
-		return fmt.Errorf("iterator ended early, want key %q", want[0])
-	}
-	return nil
 }
 
 func TestIteratorSeek(t *testing.T) {
@@ -148,11 +133,56 @@ func TestIteratorSeek(t *testing.T) {
 	}
 }
 
-// returns a cache config with unique name (groupcache names are global)
-func makeCacheConfig(t testing.TB) pgipfsethdb.CacheConfig {
-	return pgipfsethdb.CacheConfig{
-		Name:           t.Name(),
-		Size:           3000000, // 3MB
-		ExpiryDuration: time.Hour,
+func checkIteratorOrder(want []kvs, it *trie.Iterator) error {
+	for it.Next() {
+		if len(want) == 0 {
+			return fmt.Errorf("didn't expect any more values, got key %q", it.Key)
+		}
+		if !bytes.Equal(it.Key, []byte(want[0].k)) {
+			return fmt.Errorf("wrong key: got %q, want %q", it.Key, want[0].k)
+		}
+		want = want[1:]
+	}
+	if len(want) > 0 {
+		return fmt.Errorf("iterator ended early, want key %q", want[0])
+	}
+	return nil
+}
+
+func TestIteratorNodeBlob(t *testing.T) {
+	edb := rawdb.NewMemoryDatabase()
+	db := geth_trie.NewDatabase(edb)
+	orig := geth_trie.NewEmpty(geth_trie.NewDatabase(rawdb.NewMemoryDatabase()))
+	if _, err := updateTrie(orig, testdata1); err != nil {
+		t.Fatal(err)
+	}
+	root := commitTrie(t, db, orig)
+	trie := indexTrie(t, edb, root)
+
+	found := make(map[common.Hash][]byte)
+	it := trie.NodeIterator(nil)
+	for it.Next(true) {
+		if it.Hash() == (common.Hash{}) {
+			continue
+		}
+		found[it.Hash()] = it.NodeBlob()
+	}
+
+	dbIter := edb.NewIterator(nil, nil)
+	defer dbIter.Release()
+
+	var count int
+	for dbIter.Next() {
+		got, present := found[common.BytesToHash(dbIter.Key())]
+		if !present {
+			t.Fatalf("Missing trie node %v", dbIter.Key())
+		}
+		if !bytes.Equal(got, dbIter.Value()) {
+			t.Fatalf("Unexpected trie node want %v got %v", dbIter.Value(), got)
+		}
+		count += 1
+	}
+	if count != len(found) {
+		t.Fatal("Find extra trie node via iterator")
 	}
 }
