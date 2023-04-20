@@ -16,6 +16,21 @@
 
 package trie
 
+// CompactToHex converts a compact encoded path to hex format
+func CompactToHex(compact []byte) []byte {
+	if len(compact) == 0 {
+		return compact
+	}
+	base := keybytesToHex(compact)
+	// delete terminator flag
+	if base[0] < 2 {
+		base = base[:len(base)-1]
+	}
+	// apply odd flag
+	chop := 2 - base[0]&1
+	return base[chop:]
+}
+
 func keybytesToHex(str []byte) []byte {
 	l := len(str)*2 + 1
 	var nibbles = make([]byte, l)

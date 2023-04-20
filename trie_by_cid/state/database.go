@@ -42,6 +42,7 @@ type Database interface {
 // Trie is a Ethereum Merkle Patricia trie.
 type Trie interface {
 	TryGet(key []byte) ([]byte, error)
+	TryGetNode(path []byte) ([]byte, int, error)
 	TryGetAccount(key []byte) (*types.StateAccount, error)
 	Hash() common.Hash
 	NodeIterator(startKey []byte) trie.NodeIterator
