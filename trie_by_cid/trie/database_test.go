@@ -20,13 +20,15 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+
+	"github.com/cerc-io/ipld-eth-statedb/trie_by_cid/trie"
 )
 
 // Tests that the trie database returns a missing trie node error if attempting
 // to retrieve the meta root.
 func TestDatabaseMetarootFetch(t *testing.T) {
-	db := NewDatabase(memorydb.New())
-	if _, err := db.Node(CidBytes(nil)); err == nil {
+	db := trie.NewDatabase(memorydb.New())
+	if _, err := db.Node(trie.CidBytes(nil)); err == nil {
 		t.Fatalf("metaroot retrieval succeeded")
 	}
 }
