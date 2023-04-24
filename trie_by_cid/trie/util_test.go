@@ -101,11 +101,19 @@ func indexTrie(t testing.TB, edb ethdb.Database, root common.Hash) *trie.Trie {
 
 	ipfs_db := pgipfsethdb.NewDatabase(pg_db, makeCacheConfig(t))
 	sdb_db := state.NewDatabase(ipfs_db)
-	tr, err := trie.New(common.Hash{}, root, sdb_db.TrieDB(), ipld.MEthStateTrie)
+	tr, err := newStateTrie(root, sdb_db.TrieDB())
 	if err != nil {
 		t.Fatal(err)
 	}
 	return tr
+}
+
+func newStateTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
+	tr, err := trie.New(common.Hash{}, root, db, ipld.MEthStateTrie)
+	if err != nil {
+		return nil, err
+	}
+	return tr, nil
 }
 
 // generates a random Geth LevelDB trie of n key-value pairs and corresponding value map

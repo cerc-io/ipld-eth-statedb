@@ -21,27 +21,19 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 	geth_trie "github.com/ethereum/go-ethereum/trie"
 
-	pgipfsethdb "github.com/cerc-io/ipfs-ethdb/v5/postgres/v0"
 	"github.com/cerc-io/ipld-eth-statedb/trie_by_cid/trie"
 )
 
 var (
-	cacheConfig = pgipfsethdb.CacheConfig{
-		Name:           "db",
-		Size:           3000000, // 3MB
-		ExpiryDuration: time.Hour,
-	}
 	dbConfig, _ = postgres.DefaultConfig.WithEnv()
 	trieConfig  = trie.Config{Cache: 256}
-
-	ctx = context.Background()
+	ctx         = context.Background()
 
 	testdata0 = []kvs{
 		{"one", 1},

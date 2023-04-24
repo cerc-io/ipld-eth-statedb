@@ -217,7 +217,7 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 	}
 	enc, err := t.db.Node(cid)
 	if err != nil {
-		return nil, err
+		return nil, &MissingNodeError{Owner: t.owner, NodeHash: n, Path: prefix, err: err}
 	}
 	node, err := decodeNodeUnsafe(n, enc)
 	if err != nil {

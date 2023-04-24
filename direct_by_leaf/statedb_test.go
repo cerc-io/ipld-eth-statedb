@@ -97,10 +97,10 @@ func TestPGXSuite(t *testing.T) {
 		tx, err := pool.Begin(testCtx)
 		require.NoError(t, err)
 		statements := []string{
-			`DELETE FROM eth.header_cids`,
-			`DELETE FROM eth.state_cids`,
-			`DELETE FROM eth.storage_cids`,
-			`DELETE FROM ipld.blocks`,
+			`TRUNCATE eth.header_cids`,
+			`TRUNCATE eth.state_cids`,
+			`TRUNCATE eth.storage_cids`,
+			`TRUNCATE ipld.blocks`,
 		}
 		for _, stm := range statements {
 			_, err = tx.Exec(testCtx, stm)
@@ -128,10 +128,10 @@ func TestSQLXSuite(t *testing.T) {
 		tx, err := pool.Begin()
 		require.NoError(t, err)
 		statements := []string{
-			`DELETE FROM eth.header_cids`,
-			`DELETE FROM eth.state_cids`,
-			`DELETE FROM eth.storage_cids`,
-			`DELETE FROM ipld.blocks`,
+			`TRUNCATE eth.header_cids`,
+			`TRUNCATE eth.state_cids`,
+			`TRUNCATE eth.storage_cids`,
+			`TRUNCATE ipld.blocks`,
 		}
 		for _, stm := range statements {
 			_, err = tx.Exec(stm)
