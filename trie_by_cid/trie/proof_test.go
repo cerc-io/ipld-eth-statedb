@@ -21,6 +21,7 @@ import (
 	mrand "math/rand"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -30,6 +31,13 @@ import (
 
 	. "github.com/cerc-io/ipld-eth-statedb/trie_by_cid/trie"
 )
+
+// tweakable trie size
+var scaleFactor = 512
+
+func init() {
+	mrand.Seed(time.Now().UnixNano())
+}
 
 // makeProvers creates Merkle trie provers based on different implementations to
 // test all variations.
@@ -56,7 +64,7 @@ func makeProvers(trie *Trie) []func(key []byte) *memorydb.Database {
 }
 
 func TestProof(t *testing.T) {
-	trie, vals := randomTrie(t, 500)
+	trie, vals := randomTrie(t, scaleFactor)
 	root := trie.Hash()
 	for i, prover := range makeProvers(trie) {
 		for _, kv := range vals {
@@ -102,7 +110,7 @@ func TestOneElementProof(t *testing.T) {
 }
 
 func TestBadProof(t *testing.T) {
-	trie, vals := randomTrie(t, 800)
+	trie, vals := randomTrie(t, 2*scaleFactor)
 	root := trie.Hash()
 	for i, prover := range makeProvers(trie) {
 		for _, kv := range vals {
@@ -173,7 +181,7 @@ func (p entrySlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 // TestRangeProof tests normal range proof with both edge proofs
 // as the existent proof. The test cases are generated randomly.
 func TestRangeProof(t *testing.T) {
-	trie, vals := randomTrie(t, 4096)
+	trie, vals := randomTrie(t, 8*scaleFactor)
 	var entries entrySlice
 	for _, kv := range vals {
 		entries = append(entries, packEntry(kv))
@@ -206,7 +214,7 @@ func TestRangeProof(t *testing.T) {
 // TestRangeProof tests normal range proof with two non-existent proofs.
 // The test cases are generated randomly.
 func TestRangeProofWithNonExistentProof(t *testing.T) {
-	trie, vals := randomTrie(t, 4096)
+	trie, vals := randomTrie(t, 8*scaleFactor)
 	var entries entrySlice
 	for _, kv := range vals {
 		entries = append(entries, packEntry(kv))
@@ -278,7 +286,7 @@ func TestRangeProofWithNonExistentProof(t *testing.T) {
 // - There exists a gap between the first element and the left edge proof
 // - There exists a gap between the last element and the right edge proof
 func TestRangeProofWithInvalidNonExistentProof(t *testing.T) {
-	trie, vals := randomTrie(t, 4096)
+	trie, vals := randomTrie(t, 8*scaleFactor)
 	var entries entrySlice
 	for _, kv := range vals {
 		entries = append(entries, packEntry(kv))
@@ -335,7 +343,7 @@ func TestRangeProofWithInvalidNonExistentProof(t *testing.T) {
 // element. The first edge proof can be existent one or
 // non-existent one.
 func TestOneElementRangeProof(t *testing.T) {
-	trie, vals := randomTrie(t, 4096)
+	trie, vals := randomTrie(t, 8*scaleFactor)
 	var entries entrySlice
 	for _, kv := range vals {
 		entries = append(entries, packEntry(kv))
@@ -428,7 +436,7 @@ func TestOneElementRangeProof(t *testing.T) {
 // TestAllElementsProof tests the range proof with all elements.
 // The edge proofs can be nil.
 func TestAllElementsProof(t *testing.T) {
-	trie, vals := randomTrie(t, 4096)
+	trie, vals := randomTrie(t, 8*scaleFactor)
 	var entries entrySlice
 	for _, kv := range vals {
 		entries = append(entries, packEntry(kv))
@@ -475,13 +483,24 @@ func TestAllElementsProof(t *testing.T) {
 	}
 }
 
+func positionCases(size int) []int {
+	var cases []int
+	for _, pos := range []int{0, 1, 50, 100, 1000, 2000, size - 1} {
+		if pos >= size {
+			break
+		}
+		cases = append(cases, pos)
+	}
+	return cases
+}
+
 // TestSingleSideRangeProof tests the range starts from zero.
 func TestSingleSideRangeProof(t *testing.T) {
 	edb := rawdb.NewMemoryDatabase()
 	db := geth_trie.NewDatabase(edb)
 	orig := geth_trie.NewEmpty(db)
 	var entries entrySlice
-	for i := 0; i < 4096; i++ {
+	for i := 0; i < 8*scaleFactor; i++ {
 		value := &entry{randBytes(32), packValue(mrand.Int63())}
 		orig.Update(value.k, value.v)
 		entries = append(entries, value)
@@ -490,8 +509,7 @@ func TestSingleSideRangeProof(t *testing.T) {
 	trie := indexTrie(t, edb, root)
 	sort.Sort(entries)
 
-	var cases = []int{0, 1, 50, 100, 1000, 2000, len(entries) - 1}
-	for _, pos := range cases {
+	for _, pos := range positionCases(len(entries)) {
 		proof := memorydb.New()
 		if err := trie.Prove(common.Hash{}.Bytes(), 0, proof); err != nil {
 			t.Fatalf("Failed to prove the first node %v", err)
@@ -518,7 +536,7 @@ func TestReverseSingleSideRangeProof(t *testing.T) {
 	db := geth_trie.NewDatabase(edb)
 	orig := geth_trie.NewEmpty(db)
 	var entries entrySlice
-	for i := 0; i < 4096; i++ {
+	for i := 0; i < 8*scaleFactor; i++ {
 		value := &entry{randBytes(32), packValue(mrand.Int63())}
 		orig.Update(value.k, value.v)
 		entries = append(entries, value)
@@ -527,8 +545,7 @@ func TestReverseSingleSideRangeProof(t *testing.T) {
 	trie := indexTrie(t, edb, root)
 	sort.Sort(entries)
 
-	var cases = []int{0, 1, 50, 100, 1000, 2000, len(entries) - 1}
-	for _, pos := range cases {
+	for _, pos := range positionCases(len(entries)) {
 		proof := memorydb.New()
 		if err := trie.Prove(entries[pos].k, 0, proof); err != nil {
 			t.Fatalf("Failed to prove the first node %v", err)
@@ -553,7 +570,7 @@ func TestReverseSingleSideRangeProof(t *testing.T) {
 // TestBadRangeProof tests a few cases which the proof is wrong.
 // The prover is expected to detect the error.
 func TestBadRangeProof(t *testing.T) {
-	trie, vals := randomTrie(t, 4096)
+	trie, vals := randomTrie(t, 8*scaleFactor)
 	var entries entrySlice
 	for _, kv := range vals {
 		entries = append(entries, packEntry(kv))
@@ -660,7 +677,7 @@ func TestGappedRangeProof(t *testing.T) {
 
 // TestSameSideProofs tests the element is not in the range covered by proofs
 func TestSameSideProofs(t *testing.T) {
-	trie, vals := randomTrie(t, 4096)
+	trie, vals := randomTrie(t, 8*scaleFactor)
 	var entries entrySlice
 	for _, kv := range vals {
 		entries = append(entries, packEntry(kv))
@@ -706,7 +723,7 @@ func TestHasRightElement(t *testing.T) {
 	db := geth_trie.NewDatabase(edb)
 	orig := geth_trie.NewEmpty(db)
 	var entries entrySlice
-	for i := 0; i < 4096; i++ {
+	for i := 0; i < 8*scaleFactor; i++ {
 		value := &entry{randBytes(32), packValue(int64(i))}
 		orig.Update(value.k, value.v)
 		entries = append(entries, value)
@@ -780,7 +797,7 @@ func TestHasRightElement(t *testing.T) {
 // TestEmptyRangeProof tests the range proof with "no" element.
 // The first edge proof must be a non-existent proof.
 func TestEmptyRangeProof(t *testing.T) {
-	trie, vals := randomTrie(t, 4096)
+	trie, vals := randomTrie(t, 8*scaleFactor)
 	var entries entrySlice
 	for _, kv := range vals {
 		entries = append(entries, packEntry(kv))
@@ -814,7 +831,7 @@ func TestEmptyRangeProof(t *testing.T) {
 // as the existent proof, but with an extra empty value included, which is a
 // noop technically, but practically should be rejected.
 func TestEmptyValueRangeProof(t *testing.T) {
-	trie, values := randomTrie(t, 512)
+	trie, values := randomTrie(t, scaleFactor)
 	var entries entrySlice
 	for _, kv := range values {
 		entries = append(entries, packEntry(kv))
@@ -858,7 +875,7 @@ func TestEmptyValueRangeProof(t *testing.T) {
 // but with an extra empty value included, which is a noop technically, but
 // practically should be rejected.
 func TestAllElementsEmptyValueRangeProof(t *testing.T) {
-	trie, values := randomTrie(t, 512)
+	trie, values := randomTrie(t, scaleFactor)
 	var entries entrySlice
 	for _, kv := range values {
 		entries = append(entries, packEntry(kv))
