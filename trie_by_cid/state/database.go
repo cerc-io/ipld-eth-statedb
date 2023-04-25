@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 	lru "github.com/hashicorp/golang-lru"
 
+	"github.com/cerc-io/ipld-eth-statedb/internal"
 	"github.com/cerc-io/ipld-eth-statedb/trie_by_cid/trie"
 )
 
@@ -42,6 +43,7 @@ type Database interface {
 // Trie is a Ethereum Merkle Patricia trie.
 type Trie interface {
 	TryGet(key []byte) ([]byte, error)
+	TryGetNode(path []byte) ([]byte, int, error)
 	TryGetAccount(key []byte) (*types.StateAccount, error)
 	Hash() common.Hash
 	NodeIterator(startKey []byte) trie.NodeIterator
@@ -96,11 +98,10 @@ func (db *cachingDB) ContractCode(codeHash common.Hash) ([]byte, error) {
 	if code := db.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
 		return code, nil
 	}
-	// TODO - use non panicking
-	codeCID := ipld.Keccak256ToCid(ipld.RawBinary, codeHash.Bytes())
-	// if err != nil {
-	// 	return nil, err
-	// }
+	codeCID, err := internal.Keccak256ToCid(ipld.RawBinary, codeHash.Bytes())
+	if err != nil {
+		return nil, err
+	}
 	code, err := db.db.DiskDB().Get(codeCID.Bytes())
 	if err != nil {
 		return nil, err

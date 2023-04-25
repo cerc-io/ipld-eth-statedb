@@ -1,4 +1,4 @@
-package ipld_eth_statedb
+package state
 
 const (
 	GetContractCodePgStr = `SELECT data FROM ipld.blocks WHERE key = $1`

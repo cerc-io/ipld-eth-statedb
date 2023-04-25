@@ -1,4 +1,4 @@
-package ipld_eth_statedb
+package state
 
 import (
 	"context"
@@ -8,14 +8,13 @@ import (
 
 	"github.com/VictoriaMetrics/fastcache"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/jmoiron/sqlx"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 
 	util "github.com/cerc-io/ipld-eth-statedb/internal"
+	"github.com/cerc-io/ipld-eth-statedb/sql"
 )
 
 const (
@@ -43,29 +42,19 @@ type StateDatabase interface {
 var _ StateDatabase = &stateDatabase{}
 
 type stateDatabase struct {
-	db            Database
+	db            sql.Database
 	codeSizeCache *lru.Cache
 	codeCache     *fastcache.Cache
 }
 
-// NewStateDatabaseWithPgxPool returns a new Database implementation using the provided postgres connection pool
-func NewStateDatabaseWithPgxPool(pgDb *pgxpool.Pool) (*stateDatabase, error) {
+// NewStateDatabase returns a new Database implementation using the passed parameters
+func NewStateDatabase(db sql.Database) *stateDatabase {
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &stateDatabase{
-		db:            NewPostgresDB(&PGXDriver{db: pgDb}),
+		db:            db,
 		codeSizeCache: csc,
 		codeCache:     fastcache.New(codeCacheSize),
-	}, nil
-}
-
-// NewStateDatabaseWithSqlxPool returns a new Database implementation using the passed parameters
-func NewStateDatabaseWithSqlxPool(db *sqlx.DB) (*stateDatabase, error) {
-	csc, _ := lru.New(codeSizeCacheSize)
-	return &stateDatabase{
-		db:            NewPostgresDB(&SQLXDriver{db: db}),
-		codeSizeCache: csc,
-		codeCache:     fastcache.New(codeCacheSize),
-	}, nil
+	}
 }
 
 // ContractCode satisfies Database, it returns the contract code for a given codehash

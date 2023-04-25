@@ -22,12 +22,13 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ipfs/go-cid"
 )
 
-type CidBytes = []byte
+type CidKey = cid.Cid
 
-func isEmpty(key CidBytes) bool {
-	return len(key) == 0
+func isEmpty(key CidKey) bool {
+	return len(key.KeyString()) == 0
 }
 
 // Database is an intermediate read-only layer between the trie data structures and
@@ -73,57 +74,30 @@ func (db *Database) DiskDB() ethdb.KeyValueStore {
 	return db.diskdb
 }
 
-// node retrieves a cached trie node from memory, or returns nil if none can be
-// found in the memory cache.
-func (db *Database) node(key CidBytes) (node, error) {
-	// Retrieve the node from the clean cache if available
-	if db.cleans != nil {
-		if enc := db.cleans.Get(nil, key); enc != nil {
-			// The returned value from cache is in its own copy,
-			// safe to use mustDecodeNodeUnsafe for decoding.
-			return decodeNodeUnsafe(key, enc)
-		}
-	}
-
-	// Content unavailable in memory, attempt to retrieve from disk
-	enc, err := db.diskdb.Get(key)
-	if err != nil {
-		return nil, err
-	}
-	if enc == nil {
-		return nil, nil
-	}
-	if db.cleans != nil {
-		db.cleans.Set(key, enc)
-	}
-	// The returned value from database is in its own copy,
-	// safe to use mustDecodeNodeUnsafe for decoding.
-	return decodeNodeUnsafe(key, enc)
-}
-
-// Node retrieves an encoded cached trie node from memory. If it cannot be found
-// cached, the method queries the persistent database for the content.
-func (db *Database) Node(key CidBytes) ([]byte, error) {
+// Node retrieves an encoded trie node by CID. If it cannot be found
+// cached in memory, it queries the persistent database.
+func (db *Database) Node(key CidKey) ([]byte, error) {
 	// It doesn't make sense to retrieve the metaroot
 	if isEmpty(key) {
 		return nil, errors.New("not found")
 	}
+	cidbytes := key.Bytes()
 	// Retrieve the node from the clean cache if available
 	if db.cleans != nil {
-		if enc := db.cleans.Get(nil, key); enc != nil {
+		if enc := db.cleans.Get(nil, cidbytes); enc != nil {
 			return enc, nil
 		}
 	}
 
 	// Content unavailable in memory, attempt to retrieve from disk
-	enc, err := db.diskdb.Get(key)
+	enc, err := db.diskdb.Get(cidbytes)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(enc) != 0 {
 		if db.cleans != nil {
-			db.cleans.Set(key[:], enc)
+			db.cleans.Set(cidbytes, enc)
 		}
 		return enc, nil
 	}

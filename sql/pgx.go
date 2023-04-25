@@ -1,4 +1,4 @@
-package ipld_eth_statedb
+package sql
 
 import (
 	"context"
@@ -15,18 +15,9 @@ type PGXDriver struct {
 	db  *pgxpool.Pool
 }
 
-// NewPGXDriver returns a new pgx driver for Postgres
-func NewPGXDriver(ctx context.Context, config Config) (*PGXDriver, error) {
-	db, err := NewPGXPool(ctx, config)
-	if err != nil {
-		return nil, err
-	}
-	return &PGXDriver{ctx: ctx, db: db}, nil
-}
-
 // NewPGXDriverFromPool returns a new pgx driver for Postgres
-func NewPGXDriverFromPool(ctx context.Context, db *pgxpool.Pool) (*PGXDriver, error) {
-	return &PGXDriver{ctx: ctx, db: db}, nil
+func NewPGXDriverFromPool(ctx context.Context, db *pgxpool.Pool) *PGXDriver {
+	return &PGXDriver{ctx: ctx, db: db}
 }
 
 // QueryRow satisfies sql.Database
