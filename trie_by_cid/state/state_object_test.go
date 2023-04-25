@@ -14,20 +14,33 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package trie
+package state
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
-// Tests that the trie database returns a missing trie node error if attempting
-// to retrieve the meta root.
-func TestDatabaseMetarootFetch(t *testing.T) {
-	db := NewDatabase(rawdb.NewMemoryDatabase())
-	if _, err := db.Node(common.Hash{}, StateTrieCodec); err == nil {
-		t.Fatalf("metaroot retrieval succeeded")
+func BenchmarkCutOriginal(b *testing.B) {
+	value := common.HexToHash("0x01")
+	for i := 0; i < b.N; i++ {
+		bytes.TrimLeft(value[:], "\x00")
+	}
+}
+
+func BenchmarkCutsetterFn(b *testing.B) {
+	value := common.HexToHash("0x01")
+	cutSetFn := func(r rune) bool { return r == 0 }
+	for i := 0; i < b.N; i++ {
+		bytes.TrimLeftFunc(value[:], cutSetFn)
+	}
+}
+
+func BenchmarkCutCustomTrim(b *testing.B) {
+	value := common.HexToHash("0x01")
+	for i := 0; i < b.N; i++ {
+		common.TrimLeftZeroes(value[:])
 	}
 }

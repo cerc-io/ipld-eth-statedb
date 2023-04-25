@@ -1,41 +1,131 @@
-package trie_test
+package trie
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
-	"time"
-
-	"github.com/jmoiron/sqlx"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	geth_state "github.com/ethereum/go-ethereum/core/state"
+	gethstate "github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
-	geth_trie "github.com/ethereum/go-ethereum/trie"
+	gethtrie "github.com/ethereum/go-ethereum/trie"
+	"github.com/jmoiron/sqlx"
 
 	pgipfsethdb "github.com/cerc-io/ipfs-ethdb/v5/postgres/v0"
-	"github.com/cerc-io/ipld-eth-statedb/trie_by_cid/helper"
-	"github.com/cerc-io/ipld-eth-statedb/trie_by_cid/state"
-	"github.com/cerc-io/ipld-eth-statedb/trie_by_cid/trie"
 	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
-	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/statediff/test_helpers"
+
+	"github.com/cerc-io/ipld-eth-statedb/internal"
+	"github.com/cerc-io/ipld-eth-statedb/trie_by_cid/helper"
 )
 
-type kv struct {
+var (
+	dbConfig, _ = postgres.DefaultConfig.WithEnv()
+	trieConfig  = Config{Cache: 256}
+)
+
+type kvi struct {
 	k []byte
 	v int64
 }
 
-type kvMap map[string]*kv
+type kvMap map[string]*kvi
 
-type kvs struct {
+type kvsi struct {
 	k string
 	v int64
+}
+
+// NewAccountTrie is a shortcut to create a trie using the StateTrieCodec (ie. IPLD MEthStateTrie codec).
+func NewAccountTrie(id *ID, db NodeReader) (*Trie, error) {
+	return New(id, db, StateTrieCodec)
+}
+
+// makeTestTrie create a sample test trie to test node-wise reconstruction.
+func makeTestTrie(t testing.TB) (*Database, *StateTrie, map[string][]byte) {
+	// Create an empty trie
+	triedb := NewDatabase(rawdb.NewMemoryDatabase())
+	trie, err := NewStateTrie(TrieID(common.Hash{}), triedb, StateTrieCodec)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Fill it with some arbitrary data
+	content := make(map[string][]byte)
+	for i := byte(0); i < 255; i++ {
+		// Map the same data under multiple keys
+		key, val := common.LeftPadBytes([]byte{1, i}, 32), []byte{i}
+		content[string(key)] = val
+		trie.Update(key, val)
+
+		key, val = common.LeftPadBytes([]byte{2, i}, 32), []byte{i}
+		content[string(key)] = val
+		trie.Update(key, val)
+
+		// Add some other data to inflate the trie
+		for j := byte(3); j < 13; j++ {
+			key, val = common.LeftPadBytes([]byte{j, i}, 32), []byte{j, i}
+			content[string(key)] = val
+			trie.Update(key, val)
+		}
+	}
+	root, nodes := trie.Commit(false)
+	if err := triedb.Update(NewWithNodeSet(nodes)); err != nil {
+		panic(fmt.Errorf("failed to commit db %v", err))
+	}
+	// Re-create the trie based on the new state
+	trie, err = NewStateTrie(TrieID(root), triedb, StateTrieCodec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return triedb, trie, content
+}
+
+func forHashedNodes(tr *Trie) map[string][]byte {
+	var (
+		it    = tr.NodeIterator(nil)
+		nodes = make(map[string][]byte)
+	)
+	for it.Next(true) {
+		if it.Hash() == (common.Hash{}) {
+			continue
+		}
+		nodes[string(it.Path())] = common.CopyBytes(it.NodeBlob())
+	}
+	return nodes
+}
+
+func diffTries(trieA, trieB *Trie) (map[string][]byte, map[string][]byte, map[string][]byte) {
+	var (
+		nodesA = forHashedNodes(trieA)
+		nodesB = forHashedNodes(trieB)
+		inA    = make(map[string][]byte) // hashed nodes in trie a but not b
+		inB    = make(map[string][]byte) // hashed nodes in trie b but not a
+		both   = make(map[string][]byte) // hashed nodes in both tries but different value
+	)
+	for path, blobA := range nodesA {
+		if blobB, ok := nodesB[path]; ok {
+			if bytes.Equal(blobA, blobB) {
+				continue
+			}
+			both[path] = blobA
+			continue
+		}
+		inA[path] = blobA
+	}
+	for path, blobB := range nodesB {
+		if _, ok := nodesA[path]; ok {
+			continue
+		}
+		inB[path] = blobB
+	}
+	return inA, inB, both
 }
 
 func packValue(val int64) []byte {
@@ -51,27 +141,19 @@ func packValue(val int64) []byte {
 	return acct_rlp
 }
 
-func unpackValue(val []byte) int64 {
-	var acct types.StateAccount
-	if err := rlp.DecodeBytes(val, &acct); err != nil {
-		panic(err)
-	}
-	return acct.Balance.Int64()
-}
-
-func updateTrie(tr *geth_trie.Trie, vals []kvs) (kvMap, error) {
+func updateTrie(tr *gethtrie.Trie, vals []kvsi) (kvMap, error) {
 	all := kvMap{}
 	for _, val := range vals {
-		all[string(val.k)] = &kv{[]byte(val.k), val.v}
+		all[string(val.k)] = &kvi{[]byte(val.k), val.v}
 		tr.Update([]byte(val.k), packValue(val.v))
 	}
 	return all, nil
 }
 
-func commitTrie(t testing.TB, db *geth_trie.Database, tr *geth_trie.Trie) common.Hash {
+func commitTrie(t testing.TB, db *gethtrie.Database, tr *gethtrie.Trie) common.Hash {
 	t.Helper()
 	root, nodes := tr.Commit(false)
-	if err := db.Update(geth_trie.NewWithNodeSet(nodes)); err != nil {
+	if err := db.Update(gethtrie.NewWithNodeSet(nodes)); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Commit(root, false); err != nil {
@@ -80,16 +162,8 @@ func commitTrie(t testing.TB, db *geth_trie.Database, tr *geth_trie.Trie) common
 	return root
 }
 
-// commit a LevelDB state trie, index to IPLD and return new trie
-func indexTrie(t testing.TB, edb ethdb.Database, root common.Hash) *trie.Trie {
-	t.Helper()
-	dbConfig.Driver = postgres.PGX
-	err := helper.IndexChain(dbConfig, geth_state.NewDatabase(edb), common.Hash{}, root)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	pg_db, err := postgres.ConnectSQLX(ctx, dbConfig)
+func makePgIpfsEthDB(t testing.TB) ethdb.Database {
+	pg_db, err := postgres.ConnectSQLX(context.Background(), dbConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,60 +172,46 @@ func indexTrie(t testing.TB, edb ethdb.Database, root common.Hash) *trie.Trie {
 			t.Fatal(err)
 		}
 	})
+	return pgipfsethdb.NewDatabase(pg_db, internal.MakeCacheConfig(t))
+}
 
-	ipfs_db := pgipfsethdb.NewDatabase(pg_db, makeCacheConfig(t))
-	sdb_db := state.NewDatabase(ipfs_db)
-	tr, err := newStateTrie(root, sdb_db.TrieDB())
+// commit a LevelDB state trie, index to IPLD and return new trie
+func indexTrie(t testing.TB, edb ethdb.Database, root common.Hash) *Trie {
+	t.Helper()
+	dbConfig.Driver = postgres.PGX
+	err := helper.IndexStateDiff(dbConfig, gethstate.NewDatabase(edb), common.Hash{}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ipfs_db := makePgIpfsEthDB(t)
+	tr, err := New(TrieID(root), NewDatabase(ipfs_db), StateTrieCodec)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return tr
 }
 
-func newStateTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	tr, err := trie.New(common.Hash{}, root, db, ipld.MEthStateTrie)
-	if err != nil {
-		return nil, err
-	}
-	return tr, nil
-}
-
 // generates a random Geth LevelDB trie of n key-value pairs and corresponding value map
-func randomGethTrie(n int, db *geth_trie.Database) (*geth_trie.Trie, kvMap) {
-	trie := geth_trie.NewEmpty(db)
-	var vals []*kv
+func randomGethTrie(n int, db *gethtrie.Database) (*gethtrie.Trie, kvMap) {
+	trie := gethtrie.NewEmpty(db)
+	var vals []*kvi
 	for i := byte(0); i < 100; i++ {
-		e := &kv{common.LeftPadBytes([]byte{i}, 32), int64(i)}
-		e2 := &kv{common.LeftPadBytes([]byte{i + 10}, 32), int64(i)}
+		e := &kvi{common.LeftPadBytes([]byte{i}, 32), int64(i)}
+		e2 := &kvi{common.LeftPadBytes([]byte{i + 10}, 32), int64(i)}
 		vals = append(vals, e, e2)
 	}
 	for i := 0; i < n; i++ {
 		k := randBytes(32)
 		v := rand.Int63()
-		vals = append(vals, &kv{k, v})
+		vals = append(vals, &kvi{k, v})
 	}
 	all := kvMap{}
 	for _, val := range vals {
-		all[string(val.k)] = &kv{[]byte(val.k), val.v}
+		all[string(val.k)] = &kvi{[]byte(val.k), val.v}
 		trie.Update([]byte(val.k), packValue(val.v))
 	}
 	return trie, all
-}
-
-// generates a random IPLD-indexed trie
-func randomTrie(t testing.TB, n int) (*trie.Trie, kvMap) {
-	edb := rawdb.NewMemoryDatabase()
-	db := geth_trie.NewDatabase(edb)
-	orig, vals := randomGethTrie(n, db)
-	root := commitTrie(t, db, orig)
-	trie := indexTrie(t, edb, root)
-	return trie, vals
-}
-
-func randBytes(n int) []byte {
-	r := make([]byte, n)
-	rand.Read(r)
-	return r
 }
 
 // TearDownDB is used to tear down the watcher dbs after tests
@@ -178,13 +238,4 @@ func TearDownDB(db *sqlx.DB) error {
 		}
 	}
 	return tx.Commit()
-}
-
-// returns a cache config with unique name (groupcache names are global)
-func makeCacheConfig(t testing.TB) pgipfsethdb.CacheConfig {
-	return pgipfsethdb.CacheConfig{
-		Name:           t.Name(),
-		Size:           3000000, // 3MB
-		ExpiryDuration: time.Hour,
-	}
 }

@@ -18,14 +18,26 @@ package trie
 
 import (
 	"bytes"
+	"container/heap"
 	"errors"
+	"time"
+
+	"github.com/ethereum/go-ethereum/statediff/indexer/database/metrics"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/core/types"
+	gethtrie "github.com/ethereum/go-ethereum/trie"
 )
 
-// NodeIterator is a re-export of the go-ethereum interface
-type NodeIterator = trie.NodeIterator
+// NodeIterator is an iterator to traverse the trie pre-order.
+type NodeIterator = gethtrie.NodeIterator
+
+// NodeResolver is used for looking up trie nodes before reaching into the real
+// persistent layer. This is not mandatory, rather is an optimization for cases
+// where trie nodes can be recovered from some external mechanism without reading
+// from disk. In those cases, this resolver allows short circuiting accesses and
+// returning them from memory.
+type NodeResolver = gethtrie.NodeResolver
 
 // Iterator is a key-value trie iterator that traverses a Trie.
 type Iterator struct {
@@ -82,7 +94,7 @@ type nodeIterator struct {
 	path  []byte               // Path to the current node
 	err   error                // Failure set in case of an internal error in the iterator
 
-	resolver trie.NodeResolver // Optional intermediate resolver above the disk layer
+	resolver NodeResolver // optional node resolver for avoiding disk hits
 }
 
 // errIteratorEnd is stored in nodeIterator.err when iteration is done.
@@ -99,7 +111,7 @@ func (e seekError) Error() string {
 }
 
 func newNodeIterator(trie *Trie, start []byte) NodeIterator {
-	if trie.Hash() == emptyRoot {
+	if trie.Hash() == types.EmptyRootHash {
 		return &nodeIterator{
 			trie: trie,
 			err:  errIteratorEnd,
@@ -110,7 +122,7 @@ func newNodeIterator(trie *Trie, start []byte) NodeIterator {
 	return it
 }
 
-func (it *nodeIterator) AddResolver(resolver trie.NodeResolver) {
+func (it *nodeIterator) AddResolver(resolver NodeResolver) {
 	it.resolver = resolver
 }
 
@@ -126,6 +138,14 @@ func (it *nodeIterator) Parent() common.Hash {
 		return common.Hash{}
 	}
 	return it.stack[len(it.stack)-1].parent
+}
+
+func (it *nodeIterator) ParentPath() []byte {
+	if len(it.stack) == 0 {
+		return []byte{}
+	}
+	pathlen := it.stack[len(it.stack)-1].pathlen
+	return it.path[:pathlen]
 }
 
 func (it *nodeIterator) Leaf() bool {
@@ -241,7 +261,7 @@ func (it *nodeIterator) seek(prefix []byte) error {
 func (it *nodeIterator) init() (*nodeIteratorState, error) {
 	root := it.trie.Hash()
 	state := &nodeIteratorState{node: it.trie.root, index: -1}
-	if root != emptyRoot {
+	if root != types.EmptyRootHash {
 		state.hash = root
 	}
 	return state, state.resolve(it, nil)
@@ -320,7 +340,12 @@ func (it *nodeIterator) resolveHash(hash hashNode, path []byte) (node, error) {
 			}
 		}
 	}
-	return it.trie.resolveHash(hash, path)
+	// Retrieve the specified node from the underlying node reader.
+	// it.trie.resolveAndTrack is not used since in that function the
+	// loaded blob will be tracked, while it's not required here since
+	// all loaded nodes won't be linked to trie at all and track nodes
+	// may lead to out-of-memory issue.
+	return it.trie.reader.node(path, common.BytesToHash(hash))
 }
 
 func (it *nodeIterator) resolveBlob(hash hashNode, path []byte) ([]byte, error) {
@@ -329,7 +354,12 @@ func (it *nodeIterator) resolveBlob(hash hashNode, path []byte) ([]byte, error) 
 			return blob, nil
 		}
 	}
-	return it.trie.resolveBlob(hash, path)
+	// Retrieve the specified node from the underlying node reader.
+	// it.trie.resolveAndTrack is not used since in that function the
+	// loaded blob will be tracked, while it's not required here since
+	// all loaded nodes won't be linked to trie at all and track nodes
+	// may lead to out-of-memory issue.
+	return it.trie.reader.nodeBlob(path, common.BytesToHash(hash))
 }
 
 func (st *nodeIteratorState) resolve(it *nodeIterator, path []byte) error {
@@ -454,4 +484,249 @@ func (it *nodeIterator) pop() {
 	it.path = it.path[:last.pathlen]
 	it.stack[len(it.stack)-1] = nil
 	it.stack = it.stack[:len(it.stack)-1]
+}
+
+func compareNodes(a, b NodeIterator) int {
+	if cmp := bytes.Compare(a.Path(), b.Path()); cmp != 0 {
+		return cmp
+	}
+	if a.Leaf() && !b.Leaf() {
+		return -1
+	} else if b.Leaf() && !a.Leaf() {
+		return 1
+	}
+	if cmp := bytes.Compare(a.Hash().Bytes(), b.Hash().Bytes()); cmp != 0 {
+		return cmp
+	}
+	if a.Leaf() && b.Leaf() {
+		return bytes.Compare(a.LeafBlob(), b.LeafBlob())
+	}
+	return 0
+}
+
+type differenceIterator struct {
+	a, b  NodeIterator // Nodes returned are those in b - a.
+	eof   bool         // Indicates a has run out of elements
+	count int          // Number of nodes scanned on either trie
+}
+
+// NewDifferenceIterator constructs a NodeIterator that iterates over elements in b that
+// are not in a. Returns the iterator, and a pointer to an integer recording the number
+// of nodes seen.
+func NewDifferenceIterator(a, b NodeIterator) (NodeIterator, *int) {
+	a.Next(true)
+	it := &differenceIterator{
+		a: a,
+		b: b,
+	}
+	return it, &it.count
+}
+
+func (it *differenceIterator) Hash() common.Hash {
+	return it.b.Hash()
+}
+
+func (it *differenceIterator) Parent() common.Hash {
+	return it.b.Parent()
+}
+
+func (it *differenceIterator) ParentPath() []byte {
+	return it.b.ParentPath()
+}
+
+func (it *differenceIterator) Leaf() bool {
+	return it.b.Leaf()
+}
+
+func (it *differenceIterator) LeafKey() []byte {
+	return it.b.LeafKey()
+}
+
+func (it *differenceIterator) LeafBlob() []byte {
+	return it.b.LeafBlob()
+}
+
+func (it *differenceIterator) LeafProof() [][]byte {
+	return it.b.LeafProof()
+}
+
+func (it *differenceIterator) Path() []byte {
+	return it.b.Path()
+}
+
+func (it *differenceIterator) NodeBlob() []byte {
+	return it.b.NodeBlob()
+}
+
+func (it *differenceIterator) AddResolver(resolver NodeResolver) {
+	panic("not implemented")
+}
+
+func (it *differenceIterator) Next(bool) bool {
+	defer metrics.UpdateDuration(time.Now(), metrics.IndexerMetrics.DifferenceIteratorNextTimer)
+	// Invariants:
+	// - We always advance at least one element in b.
+	// - At the start of this function, a's path is lexically greater than b's.
+	if !it.b.Next(true) {
+		return false
+	}
+	it.count++
+
+	if it.eof {
+		// a has reached eof, so we just return all elements from b
+		return true
+	}
+
+	for {
+		switch compareNodes(it.a, it.b) {
+		case -1:
+			// b jumped past a; advance a
+			if !it.a.Next(true) {
+				it.eof = true
+				return true
+			}
+			it.count++
+		case 1:
+			// b is before a
+			return true
+		case 0:
+			// a and b are identical; skip this whole subtree if the nodes have hashes
+			hasHash := it.a.Hash() == common.Hash{}
+			if !it.b.Next(hasHash) {
+				return false
+			}
+			it.count++
+			if !it.a.Next(hasHash) {
+				it.eof = true
+				return true
+			}
+			it.count++
+		}
+	}
+}
+
+func (it *differenceIterator) Error() error {
+	if err := it.a.Error(); err != nil {
+		return err
+	}
+	return it.b.Error()
+}
+
+type nodeIteratorHeap []NodeIterator
+
+func (h nodeIteratorHeap) Len() int            { return len(h) }
+func (h nodeIteratorHeap) Less(i, j int) bool  { return compareNodes(h[i], h[j]) < 0 }
+func (h nodeIteratorHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
+func (h *nodeIteratorHeap) Push(x interface{}) { *h = append(*h, x.(NodeIterator)) }
+func (h *nodeIteratorHeap) Pop() interface{} {
+	n := len(*h)
+	x := (*h)[n-1]
+	*h = (*h)[0 : n-1]
+	return x
+}
+
+type unionIterator struct {
+	items *nodeIteratorHeap // Nodes returned are the union of the ones in these iterators
+	count int               // Number of nodes scanned across all tries
+}
+
+// NewUnionIterator constructs a NodeIterator that iterates over elements in the union
+// of the provided NodeIterators. Returns the iterator, and a pointer to an integer
+// recording the number of nodes visited.
+func NewUnionIterator(iters []NodeIterator) (NodeIterator, *int) {
+	h := make(nodeIteratorHeap, len(iters))
+	copy(h, iters)
+	heap.Init(&h)
+
+	ui := &unionIterator{items: &h}
+	return ui, &ui.count
+}
+
+func (it *unionIterator) Hash() common.Hash {
+	return (*it.items)[0].Hash()
+}
+
+func (it *unionIterator) Parent() common.Hash {
+	return (*it.items)[0].Parent()
+}
+
+func (it *unionIterator) ParentPath() []byte {
+	return (*it.items)[0].ParentPath()
+}
+
+func (it *unionIterator) Leaf() bool {
+	return (*it.items)[0].Leaf()
+}
+
+func (it *unionIterator) LeafKey() []byte {
+	return (*it.items)[0].LeafKey()
+}
+
+func (it *unionIterator) LeafBlob() []byte {
+	return (*it.items)[0].LeafBlob()
+}
+
+func (it *unionIterator) LeafProof() [][]byte {
+	return (*it.items)[0].LeafProof()
+}
+
+func (it *unionIterator) Path() []byte {
+	return (*it.items)[0].Path()
+}
+
+func (it *unionIterator) NodeBlob() []byte {
+	return (*it.items)[0].NodeBlob()
+}
+
+func (it *unionIterator) AddResolver(resolver NodeResolver) {
+	panic("not implemented")
+}
+
+// Next returns the next node in the union of tries being iterated over.
+//
+// It does this by maintaining a heap of iterators, sorted by the iteration
+// order of their next elements, with one entry for each source trie. Each
+// time Next() is called, it takes the least element from the heap to return,
+// advancing any other iterators that also point to that same element. These
+// iterators are called with descend=false, since we know that any nodes under
+// these nodes will also be duplicates, found in the currently selected iterator.
+// Whenever an iterator is advanced, it is pushed back into the heap if it still
+// has elements remaining.
+//
+// In the case that descend=false - eg, we're asked to ignore all subnodes of the
+// current node - we also advance any iterators in the heap that have the current
+// path as a prefix.
+func (it *unionIterator) Next(descend bool) bool {
+	if len(*it.items) == 0 {
+		return false
+	}
+
+	// Get the next key from the union
+	least := heap.Pop(it.items).(NodeIterator)
+
+	// Skip over other nodes as long as they're identical, or, if we're not descending, as
+	// long as they have the same prefix as the current node.
+	for len(*it.items) > 0 && ((!descend && bytes.HasPrefix((*it.items)[0].Path(), least.Path())) || compareNodes(least, (*it.items)[0]) == 0) {
+		skipped := heap.Pop(it.items).(NodeIterator)
+		// Skip the whole subtree if the nodes have hashes; otherwise just skip this node
+		if skipped.Next(skipped.Hash() == common.Hash{}) {
+			it.count++
+			// If there are more elements, push the iterator back on the heap
+			heap.Push(it.items, skipped)
+		}
+	}
+	if least.Next(descend) {
+		it.count++
+		heap.Push(it.items, least)
+	}
+	return len(*it.items) > 0
+}
+
+func (it *unionIterator) Error() error {
+	for i := 0; i < len(*it.items); i++ {
+		if err := (*it.items)[i].Error(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
