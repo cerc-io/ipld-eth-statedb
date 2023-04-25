@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 var indices = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f", "[17]"}
@@ -157,7 +156,7 @@ func decodeShort(hash, elems []byte) (node, error) {
 		return nil, err
 	}
 	flag := nodeFlag{hash: hash}
-	key := trie.CompactToHex(kbuf)
+	key := compactToHex(kbuf)
 	if hasTerm(key) {
 		// value node
 		val, _, err := rlp.SplitString(rest)

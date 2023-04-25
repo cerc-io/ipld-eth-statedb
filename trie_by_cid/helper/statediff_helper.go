@@ -20,7 +20,10 @@ var (
 	mockTD = big.NewInt(1)
 )
 
-func IndexChain(dbConfig postgres.Config, stateCache state.Database, rootA, rootB common.Hash) error {
+// IndexStateDiff indexes a single statediff.
+// - uses TestChainConfig
+// - block hash/number are left as zero
+func IndexStateDiff(dbConfig postgres.Config, stateCache state.Database, rootA, rootB common.Hash) error {
 	_, indexer, err := indexer.NewStateDiffIndexer(
 		context.Background(), ChainConfig, node.Info{}, dbConfig)
 	if err != nil {
@@ -28,11 +31,10 @@ func IndexChain(dbConfig postgres.Config, stateCache state.Database, rootA, root
 	}
 	defer indexer.Close() // fixme: hangs when using PGX driver
 
-	// generating statediff payload for block, and transform the data into Postgres
 	builder := statediff.NewBuilder(stateCache)
 	block := types.NewBlock(&types.Header{Root: rootB}, nil, nil, nil, NewHasher())
 
-	// todo: use dummy block hashes to just produce trie structure for testing
+	// uses zero block hash/number, we only need the trie structure here
 	args := statediff.Args{
 		OldStateRoot: rootA,
 		NewStateRoot: rootB,
@@ -45,12 +47,7 @@ func IndexChain(dbConfig postgres.Config, stateCache state.Database, rootA, root
 	if err != nil {
 		return err
 	}
-	// for _, node := range diff.Nodes {
-	// 	err := indexer.PushStateNode(tx, node, block.Hash().String())
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// }
+	// we don't need to index diff.Nodes since we are just interested in the trie
 	for _, ipld := range diff.IPLDs {
 		if err := indexer.PushIPLD(tx, ipld); err != nil {
 			return err

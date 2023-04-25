@@ -27,7 +27,7 @@ import (
 // information necessary for retrieving the missing node.
 type MissingNodeError struct {
 	Owner    common.Hash // owner of the trie if it's 2-layered trie
-	NodeHash []byte      // hash of the missing node
+	NodeHash common.Hash // hash of the missing node
 	Path     []byte      // hex-encoded path to the missing node
 	err      error       // concrete error for missing trie node
 }
