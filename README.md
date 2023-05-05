@@ -1,18 +1,14 @@
 # ipld-eth-statedb
 
-Implementation of the geth [vm.StateDB](https://github.com/ethereum/go-ethereum/blob/master/core/vm/interface.go#L28) on top of
-[ipld-eth-db](https://github.com/cerc-io/ipld-eth-db), to allow us to plug into existing EVM functionality. Analogous to
-[ipfs-ethdb](https://github.com/cerc-io/ipfs-ethdb) but at one database abstraction level higher. This allows us to
-bypass the trie-traversal access pattern normally used by the EVM (and which ipfs-ethdb allows us to replicate ontop of our
-Postgres IPLD blockstore in the "public.blocks" table) and access state and storage directly in the "state_cids" and
-"storage_cids" tables.
+This contains multiple implementations of the geth [vm.StateDB](https://github.com/ethereum/go-ethereum/blob/master/core/vm/interface.go#L28) and supporting types for different use cases.
 
+## Package `direct_by_leaf`
 
-Note: "IPFS" is chosen in the name of "ipfs-ethdb" as it can function through an IPFS BlockService abstraction or directly ontop of an IPLD blockstore, whereas this repository
-is very tightly coupled to the schema in ipld-eth-db.
+A read-only implementation which uses the schema defined in [ipld-eth-db](https://github.com/cerc-io/ipld-eth-db), to allow direct querying by state and storage node leaf key, bypassing the trie-traversal access pattern normally used by the EVM.
+This operates at one abstraction level higher than [ipfs-ethdb](https://github.com/cerc-io/ipfs-ethdb), and is suitable for providing fast state reads.
 
-The top-level package contains the implementation of the `vm.StateDB` interface that accesses state directly using the
-`state_cids` and `storage_cids` tables in ipld-eth-db. The `trie_by_cid` package contains an alternative implementation
-which accesses state in `ipld.blocks` through the typical trie traversal access pattern (using CIDs instead of raw
-keccak256 hashes), it is used for benchmarking and for functionality which requires performing a trie traversal
-(things which must collect intermediate nodes, e.g. `eth_getProof` and `eth_getSlice`).
+## Package `trie_by_cid`
+
+A read-write implementation which uses a Postgres IPLD v0 Blockstore as the backing `ethdb.Database`. Specifically this passes v1 CIDs of Keccak-256 hashes to the database in place of plain hashes, and can be used in combination with a [ipfs-ethdb/postgres/v0](https://github.com/cerc-io/ipfs-ethdb/tree/v5/postgres/v0) `Database` instance, or an IPLD BlockService providing a v0 Blockstore.
+
+This implementation uses trie traversal to access state, and is capable of computing state root hashes and performing full EVM operations. It's also suitable for scenarios requiring trie traversal and access to intermediate state nodes (e.g. `eth_getProof` and `eth_getSlice` on [ipld-eth-server](https://github.com/cerc-io/ipld-eth-server)).
