@@ -22,7 +22,13 @@ import (
 )
 
 var (
-	testCtx = context.Background()
+	testCtx            = context.Background()
+	teardownStatements = []string{
+		`TRUNCATE eth.header_cids`,
+		`TRUNCATE eth.state_cids`,
+		`TRUNCATE eth.storage_cids`,
+		`TRUNCATE ipld.blocks`,
+	}
 
 	// Fixture data
 	// block one: contract account and slot are created
@@ -96,13 +102,7 @@ func TestPGXSuite(t *testing.T) {
 	t.Cleanup(func() {
 		tx, err := pool.Begin(testCtx)
 		require.NoError(t, err)
-		statements := []string{
-			`TRUNCATE eth.header_cids`,
-			`TRUNCATE eth.state_cids`,
-			`TRUNCATE eth.storage_cids`,
-			`TRUNCATE ipld.blocks`,
-		}
-		for _, stm := range statements {
+		for _, stm := range teardownStatements {
 			_, err = tx.Exec(testCtx, stm)
 			require.NoErrorf(t, err, "Exec(`%s`)", stm)
 		}
@@ -127,13 +127,7 @@ func TestSQLXSuite(t *testing.T) {
 	t.Cleanup(func() {
 		tx, err := pool.Begin()
 		require.NoError(t, err)
-		statements := []string{
-			`TRUNCATE eth.header_cids`,
-			`TRUNCATE eth.state_cids`,
-			`TRUNCATE eth.storage_cids`,
-			`TRUNCATE ipld.blocks`,
-		}
-		for _, stm := range statements {
+		for _, stm := range teardownStatements {
 			_, err = tx.Exec(stm)
 			require.NoErrorf(t, err, "Exec(`%s`)", stm)
 		}
