@@ -18,15 +18,15 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	pgipfsethdb "github.com/cerc-io/ipfs-ethdb/v5/postgres/v0"
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
-	"github.com/ethereum/go-ethereum/statediff/test_helpers"
+	"github.com/cerc-io/plugeth-statediff/indexer/database/sql/postgres"
+	"github.com/cerc-io/plugeth-statediff/test_helpers"
 
 	"github.com/cerc-io/ipld-eth-statedb/internal"
 	"github.com/cerc-io/ipld-eth-statedb/trie_by_cid/helper"
 )
 
 var (
-	dbConfig, _ = postgres.DefaultConfig.WithEnv()
+	dbConfig, _ = postgres.TestConfig.WithEnv()
 	trieConfig  = Config{Cache: 256}
 )
 

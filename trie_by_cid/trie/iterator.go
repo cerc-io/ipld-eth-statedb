@@ -20,9 +20,6 @@ import (
 	"bytes"
 	"container/heap"
 	"errors"
-	"time"
-
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/metrics"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -530,10 +527,6 @@ func (it *differenceIterator) Parent() common.Hash {
 	return it.b.Parent()
 }
 
-func (it *differenceIterator) ParentPath() []byte {
-	return it.b.ParentPath()
-}
-
 func (it *differenceIterator) Leaf() bool {
 	return it.b.Leaf()
 }
@@ -563,7 +556,6 @@ func (it *differenceIterator) AddResolver(resolver NodeResolver) {
 }
 
 func (it *differenceIterator) Next(bool) bool {
-	defer metrics.UpdateDuration(time.Now(), metrics.IndexerMetrics.DifferenceIteratorNextTimer)
 	// Invariants:
 	// - We always advance at least one element in b.
 	// - At the start of this function, a's path is lexically greater than b's.
@@ -648,10 +640,6 @@ func (it *unionIterator) Hash() common.Hash {
 
 func (it *unionIterator) Parent() common.Hash {
 	return (*it.items)[0].Parent()
-}
-
-func (it *unionIterator) ParentPath() []byte {
-	return (*it.items)[0].ParentPath()
 }
 
 func (it *unionIterator) Leaf() bool {

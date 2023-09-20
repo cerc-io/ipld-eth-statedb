@@ -11,7 +11,7 @@ const (
 						AND header_cids.block_number <= (SELECT block_number
 															FROM eth.header_cids
 															WHERE block_hash = $2)
-						AND header_cids.block_hash = (SELECT canonical_header_hash(header_cids.block_number))
+						AND header_cids.canonical
 						ORDER BY header_cids.block_number DESC
 						LIMIT 1`
 	GetStorageSlot = `SELECT val, removed, state_leaf_removed FROM get_storage_at_by_hash($1, $2, $3)`

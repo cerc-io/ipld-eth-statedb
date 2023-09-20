@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
+	"github.com/cerc-io/plugeth-statediff/indexer/ipld"
 )
 
 var (

@@ -4,14 +4,15 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/cerc-io/plugeth-statediff"
+	"github.com/cerc-io/plugeth-statediff/adapt"
+	"github.com/cerc-io/plugeth-statediff/indexer"
+	"github.com/cerc-io/plugeth-statediff/indexer/database/sql/postgres"
+	"github.com/cerc-io/plugeth-statediff/indexer/node"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/statediff"
-	"github.com/ethereum/go-ethereum/statediff/indexer"
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
-	"github.com/ethereum/go-ethereum/statediff/indexer/node"
 )
 
 var (
@@ -31,7 +32,7 @@ func IndexStateDiff(dbConfig postgres.Config, stateCache state.Database, rootA, 
 	}
 	defer indexer.Close() // fixme: hangs when using PGX driver
 
-	builder := statediff.NewBuilder(stateCache)
+	builder := statediff.NewBuilder(adapt.GethStateView(stateCache))
 	block := types.NewBlock(&types.Header{Root: rootB}, nil, nil, nil, NewHasher())
 
 	// uses zero block hash/number, we only need the trie structure here

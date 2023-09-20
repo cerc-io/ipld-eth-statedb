@@ -9,9 +9,9 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	lru "github.com/hashicorp/golang-lru"
 
+	"github.com/cerc-io/plugeth-statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 
 	util "github.com/cerc-io/ipld-eth-statedb/internal"
 	"github.com/cerc-io/ipld-eth-statedb/sql"

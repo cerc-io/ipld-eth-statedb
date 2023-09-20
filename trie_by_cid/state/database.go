@@ -20,11 +20,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/cerc-io/plugeth-statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 
 	"github.com/cerc-io/ipld-eth-statedb/internal"
 	"github.com/cerc-io/ipld-eth-statedb/trie_by_cid/trie"

@@ -9,12 +9,12 @@ import (
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cerc-io/plugeth-statediff/indexer/database/sql/postgres"
+	"github.com/cerc-io/plugeth-statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
-	"github.com/ethereum/go-ethereum/statediff/indexer/ipld"
 
 	state "github.com/cerc-io/ipld-eth-statedb/direct_by_leaf"
 	util "github.com/cerc-io/ipld-eth-statedb/internal"
@@ -93,7 +93,7 @@ var (
 )
 
 func TestPGXSuite(t *testing.T) {
-	testConfig, err := postgres.DefaultConfig.WithEnv()
+	testConfig, err := postgres.TestConfig.WithEnv()
 	require.NoError(t, err)
 	pool, err := postgres.ConnectPGX(testCtx, testConfig)
 	if err != nil {
@@ -118,7 +118,7 @@ func TestPGXSuite(t *testing.T) {
 }
 
 func TestSQLXSuite(t *testing.T) {
-	testConfig, err := postgres.DefaultConfig.WithEnv()
+	testConfig, err := postgres.TestConfig.WithEnv()
 	require.NoError(t, err)
 	pool, err := postgres.ConnectSQLX(testCtx, testConfig)
 	if err != nil {
@@ -143,14 +143,14 @@ func TestSQLXSuite(t *testing.T) {
 }
 
 func insertSuiteData(t *testing.T, database sql.Database) {
-	require.NoError(t, insertHeaderCID(database, BlockHash.String(), BlockParentHash.String(), BlockNumber.Uint64()))
-	require.NoError(t, insertHeaderCID(database, BlockHash2.String(), BlockHash.String(), BlockNumber2))
-	require.NoError(t, insertHeaderCID(database, BlockHash3.String(), BlockHash2.String(), BlockNumber3))
-	require.NoError(t, insertHeaderCID(database, BlockHash4.String(), BlockHash3.String(), BlockNumber4))
-	require.NoError(t, insertHeaderCID(database, NonCanonicalHash4.String(), BlockHash3.String(), BlockNumber4))
-	require.NoError(t, insertHeaderCID(database, BlockHash5.String(), BlockHash4.String(), BlockNumber5))
-	require.NoError(t, insertHeaderCID(database, NonCanonicalHash5.String(), NonCanonicalHash4.String(), BlockNumber5))
-	require.NoError(t, insertHeaderCID(database, BlockHash6.String(), BlockHash5.String(), BlockNumber6))
+	require.NoError(t, insertHeaderCID(database, BlockHash.String(), BlockParentHash.String(), BlockNumber.Uint64(), true))
+	require.NoError(t, insertHeaderCID(database, BlockHash2.String(), BlockHash.String(), BlockNumber2, true))
+	require.NoError(t, insertHeaderCID(database, BlockHash3.String(), BlockHash2.String(), BlockNumber3, true))
+	require.NoError(t, insertHeaderCID(database, BlockHash4.String(), BlockHash3.String(), BlockNumber4, true))
+	require.NoError(t, insertHeaderCID(database, NonCanonicalHash4.String(), BlockHash3.String(), BlockNumber4, false))
+	require.NoError(t, insertHeaderCID(database, BlockHash5.String(), BlockHash4.String(), BlockNumber5, true))
+	require.NoError(t, insertHeaderCID(database, NonCanonicalHash5.String(), NonCanonicalHash4.String(), BlockNumber5, false))
+	require.NoError(t, insertHeaderCID(database, BlockHash6.String(), BlockHash5.String(), BlockNumber6, true))
 	require.NoError(t, insertStateCID(database, stateModel{
 		BlockNumber: BlockNumber.Uint64(),
 		BlockHash:   BlockHash.String(),
@@ -337,7 +337,7 @@ func testSuite(t *testing.T, db state.StateDatabase) {
 	})
 }
 
-func insertHeaderCID(db sql.Database, blockHash, parentHash string, blockNumber uint64) error {
+func insertHeaderCID(db sql.Database, blockHash, parentHash string, blockNumber uint64, canon bool) error {
 	cid, err := util.Keccak256ToCid(ipld.MEthHeader, common.HexToHash(blockHash).Bytes())
 	if err != nil {
 		return err
@@ -356,8 +356,9 @@ func insertHeaderCID(db sql.Database, blockHash, parentHash string, blockNumber 
 	uncles_hash,
 	bloom,
 	timestamp,
-	coinbase
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
+	coinbase,
+	canonical
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
 	_, err = db.Exec(testCtx, sql,
 		blockNumber,
 		blockHash,
@@ -371,6 +372,7 @@ func insertHeaderCID(db sql.Database, blockHash, parentHash string, blockNumber 
 		[]byte{},
 		Header.Time,
 		Header.Coinbase.String(),
+		canon,
 	)
 	return err
 }

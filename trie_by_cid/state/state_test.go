@@ -23,18 +23,18 @@ import (
 	"testing"
 
 	pgipfsethdb "github.com/cerc-io/ipfs-ethdb/v5/postgres/v0"
+	"github.com/cerc-io/plugeth-statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/statediff/indexer/database/sql/postgres"
 
 	"github.com/cerc-io/ipld-eth-statedb/internal"
 )
 
 var (
 	testCtx            = context.Background()
-	testConfig, _      = postgres.DefaultConfig.WithEnv()
+	testConfig, _      = postgres.TestConfig.WithEnv()
 	teardownStatements = []string{`TRUNCATE ipld.blocks`}
 )
 
