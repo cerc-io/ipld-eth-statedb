@@ -25,6 +25,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.2 // indirect
+	github.com/cerc-io/eth-iterator-utils v0.1.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cockroachdb/errors v1.10.0 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
@@ -114,8 +115,9 @@ require (
 )
 
 replace (
-	github.com/cerc-io/eth-testing => git.vdb.to/cerc-io/eth-testing v0.2.1
-	github.com/cerc-io/plugeth-statediff => git.vdb.to/cerc-io/plugeth-statediff v0.1.1
+	github.com/cerc-io/eth-iterator-utils => git.vdb.to/cerc-io/eth-iterator-utils v0.1.2
+	github.com/cerc-io/eth-testing => git.vdb.to/cerc-io/eth-testing v0.3.1
+	github.com/cerc-io/plugeth-statediff => git.vdb.to/cerc-io/plugeth-statediff v0.1.4
 	github.com/ethereum/go-ethereum => git.vdb.to/cerc-io/plugeth v0.0.0-20230808125822-691dc334fab1
 	github.com/openrelayxyz/plugeth-utils => git.vdb.to/cerc-io/plugeth-utils v0.0.0-20230706160122-cd41de354c46
 )

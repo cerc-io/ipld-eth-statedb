@@ -26,7 +26,7 @@ var (
 // - block hash/number are left as zero
 func IndexStateDiff(dbConfig postgres.Config, stateCache state.Database, rootA, rootB common.Hash) error {
 	_, indexer, err := indexer.NewStateDiffIndexer(
-		context.Background(), ChainConfig, node.Info{}, dbConfig)
+		context.Background(), ChainConfig, node.Info{}, dbConfig, true)
 	if err != nil {
 		return err
 	}
@@ -54,5 +54,5 @@ func IndexStateDiff(dbConfig postgres.Config, stateCache state.Database, rootA, 
 			return err
 		}
 	}
-	return tx.Submit(err)
+	return tx.Submit()
 }

@@ -1,8 +1,10 @@
-git.vdb.to/cerc-io/eth-testing v0.2.1 h1:IZAX7DVgzPkSmu1xdKZ5aOemdEYbvtgae7GUl/TUNtQ=
+git.vdb.to/cerc-io/eth-iterator-utils v0.1.2 h1:PdMR5B9wrQSYuYpFhN+9Kc8AEZ0pTt5eKCmu8oCtFcY=
+git.vdb.to/cerc-io/eth-iterator-utils v0.1.2/go.mod h1:OvXbdWbZ5viBXC/Ui1EkhsSmGB+AUX+TjGa3UDAfjfg=
+git.vdb.to/cerc-io/eth-testing v0.3.1 h1:sPnlMev6oEgTjsW7GtUkSsjKNG/+X6P9q0izSejLGpM=
 git.vdb.to/cerc-io/plugeth v0.0.0-20230808125822-691dc334fab1 h1:KLjxHwp9Zp7xhECccmJS00RiL+VwTuUGLU7qeIctg8g=
 git.vdb.to/cerc-io/plugeth v0.0.0-20230808125822-691dc334fab1/go.mod h1:cYXZu70+6xmDgIgrTD81GPasv16piiAFJnKyAbwVPMU=
-git.vdb.to/cerc-io/plugeth-statediff v0.1.1 h1:qKygQwZO2vECySFpgfaiXwWn275jIV//pwsuNfeCXLo=
-git.vdb.to/cerc-io/plugeth-statediff v0.1.1/go.mod h1:61WPXOqJshEkxzalwyyLukTiIBG+Z7WyfvRdhVLfBF8=
+git.vdb.to/cerc-io/plugeth-statediff v0.1.4 h1:swDJDAk1/yu6MOHAvxeyZz+MS1H9FCmSWGQRswFxFEw=
+git.vdb.to/cerc-io/plugeth-statediff v0.1.4/go.mod h1:PX1bwTwZKzegQu6zYdpuJf1tHNmU0suapKOUUO2xIzs=
 git.vdb.to/cerc-io/plugeth-utils v0.0.0-20230706160122-cd41de354c46 h1:KYcbbne/RXd7AuxbUd/3hgk1jPN+33k2CKiNsUsMCC0=
 git.vdb.to/cerc-io/plugeth-utils v0.0.0-20230706160122-cd41de354c46/go.mod h1:VpDN61dxy64zGff05F0adujR5enD/JEdXBkTQ+PaIsQ=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
