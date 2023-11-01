@@ -115,7 +115,7 @@ require (
 )
 
 replace (
-	github.com/cerc-io/eth-iterator-utils => git.vdb.to/cerc-io/eth-iterator-utils v0.1.2
+	github.com/cerc-io/eth-iterator-utils => git.vdb.to/cerc-io/eth-iterator-utils v0.1.2-beta
 	github.com/cerc-io/eth-testing => git.vdb.to/cerc-io/eth-testing v0.3.1
 	github.com/cerc-io/plugeth-statediff => git.vdb.to/cerc-io/plugeth-statediff v0.1.4
 	github.com/ethereum/go-ethereum => git.vdb.to/cerc-io/plugeth v0.0.0-20230808125822-691dc334fab1
