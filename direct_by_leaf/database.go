@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/VictoriaMetrics/fastcache"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/holiman/uint256"
 
 	"github.com/cerc-io/plugeth-statediff/indexer/ipld"
 	"github.com/ethereum/go-ethereum/common"
@@ -30,27 +30,27 @@ var (
 	errNotFound = errors.New("not found")
 )
 
-// StateDatabase interface is a union of the subset of the geth state.Database interface required
+// Database interface is a union of the subset of the geth state.Database interface required
 // to support the vm.StateDB implementation as well as methods specific to this Postgres based implementation
-type StateDatabase interface {
+type Database interface {
 	ContractCode(codeHash common.Hash) ([]byte, error)
 	ContractCodeSize(codeHash common.Hash) (int, error)
 	StateAccount(addressHash, blockHash common.Hash) (*types.StateAccount, error)
 	StorageValue(addressHash, slotHash, blockHash common.Hash) ([]byte, error)
 }
 
-var _ StateDatabase = &stateDatabase{}
+var _ Database = &cachingDB{}
 
-type stateDatabase struct {
+type cachingDB struct {
 	db            sql.Database
 	codeSizeCache *lru.Cache
 	codeCache     *fastcache.Cache
 }
 
-// NewStateDatabase returns a new Database implementation using the passed parameters
-func NewStateDatabase(db sql.Database) *stateDatabase {
+// NewDatabase returns a new Database implementation using the passed parameters
+func NewDatabase(db sql.Database) *cachingDB {
 	csc, _ := lru.New(codeSizeCacheSize)
-	return &stateDatabase{
+	return &cachingDB{
 		db:            db,
 		codeSizeCache: csc,
 		codeCache:     fastcache.New(codeCacheSize),
@@ -58,7 +58,7 @@ func NewStateDatabase(db sql.Database) *stateDatabase {
 }
 
 // ContractCode satisfies Database, it returns the contract code for a given codehash
-func (sd *stateDatabase) ContractCode(codeHash common.Hash) ([]byte, error) {
+func (sd *cachingDB) ContractCode(codeHash common.Hash) ([]byte, error) {
 	if code := sd.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
 		return code, nil
 	}
@@ -79,7 +79,7 @@ func (sd *stateDatabase) ContractCode(codeHash common.Hash) ([]byte, error) {
 }
 
 // ContractCodeSize satisfies Database, it returns the length of the code for a provided codehash
-func (sd *stateDatabase) ContractCodeSize(codeHash common.Hash) (int, error) {
+func (sd *cachingDB) ContractCodeSize(codeHash common.Hash) (int, error) {
 	if cached, ok := sd.codeSizeCache.Get(codeHash); ok {
 		return cached.(int), nil
 	}
@@ -88,7 +88,7 @@ func (sd *stateDatabase) ContractCodeSize(codeHash common.Hash) (int, error) {
 }
 
 // StateAccount satisfies Database, it returns the types.StateAccount for a provided address and block hash
-func (sd *stateDatabase) StateAccount(addressHash, blockHash common.Hash) (*types.StateAccount, error) {
+func (sd *cachingDB) StateAccount(addressHash, blockHash common.Hash) (*types.StateAccount, error) {
 	res := StateAccountResult{}
 	err := sd.db.QueryRow(context.Background(), GetStateAccount, addressHash.Hex(), blockHash.Hex()).
 		Scan(&res.Balance, &res.Nonce, &res.CodeHash, &res.StorageRoot, &res.Removed)
@@ -99,8 +99,10 @@ func (sd *stateDatabase) StateAccount(addressHash, blockHash common.Hash) (*type
 		// TODO: check expected behavior for deleted/non existing accounts
 		return nil, nil
 	}
-	bal := new(big.Int)
-	bal.SetString(res.Balance, 10)
+	bal, err := uint256.FromDecimal(res.Balance)
+	if err != nil {
+		return nil, err
+	}
 	return &types.StateAccount{
 		Nonce:    res.Nonce,
 		Balance:  bal,
@@ -111,7 +113,7 @@ func (sd *stateDatabase) StateAccount(addressHash, blockHash common.Hash) (*type
 
 // StorageValue satisfies Database, it returns the RLP-encoded storage value for the provided address, slot,
 // and block hash
-func (sd *stateDatabase) StorageValue(addressHash, slotHash, blockHash common.Hash) ([]byte, error) {
+func (sd *cachingDB) StorageValue(addressHash, slotHash, blockHash common.Hash) ([]byte, error) {
 	res := StorageSlotResult{}
 	err := sd.db.QueryRow(context.Background(), GetStorageSlot,
 		addressHash.Hex(), slotHash.Hex(), blockHash.Hex()).

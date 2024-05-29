@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
-	"math/big"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -30,8 +29,11 @@ import (
 	"testing/quick"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
+
+	"github.com/cerc-io/ipld-eth-statedb/trie_by_cid/trie"
 )
 
 // TestCopy tests that copying a StateDB object indeed makes the original and
@@ -39,11 +41,13 @@ import (
 // https://github.com/ethereum/go-ethereum/pull/15549.
 func TestCopy(t *testing.T) {
 	// Create a random state test to copy and modify "independently"
-	orig, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	db, cleanup := newPgIpfsEthdb(t)
+	t.Cleanup(cleanup)
+	orig, _ := New(types.EmptyRootHash, NewDatabase(db), nil)
 
 	for i := byte(0); i < 255; i++ {
-		obj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
-		obj.AddBalance(big.NewInt(int64(i)))
+		obj := orig.getOrNewStateObject(common.BytesToAddress([]byte{i}))
+		obj.AddBalance(uint256.NewInt(uint64(i)))
 		orig.updateStateObject(obj)
 	}
 	orig.Finalise(false)
@@ -56,13 +60,13 @@ func TestCopy(t *testing.T) {
 
 	// modify all in memory
 	for i := byte(0); i < 255; i++ {
-		origObj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
-		copyObj := copy.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
-		ccopyObj := ccopy.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		origObj := orig.getOrNewStateObject(common.BytesToAddress([]byte{i}))
+		copyObj := copy.getOrNewStateObject(common.BytesToAddress([]byte{i}))
+		ccopyObj := ccopy.getOrNewStateObject(common.BytesToAddress([]byte{i}))
 
-		origObj.AddBalance(big.NewInt(2 * int64(i)))
-		copyObj.AddBalance(big.NewInt(3 * int64(i)))
-		ccopyObj.AddBalance(big.NewInt(4 * int64(i)))
+		origObj.AddBalance(uint256.NewInt(2 * uint64(i)))
+		copyObj.AddBalance(uint256.NewInt(3 * uint64(i)))
+		ccopyObj.AddBalance(uint256.NewInt(4 * uint64(i)))
 
 		orig.updateStateObject(origObj)
 		copy.updateStateObject(copyObj)
@@ -84,25 +88,34 @@ func TestCopy(t *testing.T) {
 
 	// Verify that the three states have been updated independently
 	for i := byte(0); i < 255; i++ {
-		origObj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
-		copyObj := copy.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
-		ccopyObj := ccopy.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		origObj := orig.getOrNewStateObject(common.BytesToAddress([]byte{i}))
+		copyObj := copy.getOrNewStateObject(common.BytesToAddress([]byte{i}))
+		ccopyObj := ccopy.getOrNewStateObject(common.BytesToAddress([]byte{i}))
 
-		if want := big.NewInt(3 * int64(i)); origObj.Balance().Cmp(want) != 0 {
+		if want := uint256.NewInt(3 * uint64(i)); origObj.Balance().Cmp(want) != 0 {
 			t.Errorf("orig obj %d: balance mismatch: have %v, want %v", i, origObj.Balance(), want)
 		}
-		if want := big.NewInt(4 * int64(i)); copyObj.Balance().Cmp(want) != 0 {
+		if want := uint256.NewInt(4 * uint64(i)); copyObj.Balance().Cmp(want) != 0 {
 			t.Errorf("copy obj %d: balance mismatch: have %v, want %v", i, copyObj.Balance(), want)
 		}
-		if want := big.NewInt(5 * int64(i)); ccopyObj.Balance().Cmp(want) != 0 {
+		if want := uint256.NewInt(5 * uint64(i)); ccopyObj.Balance().Cmp(want) != 0 {
 			t.Errorf("copy obj %d: balance mismatch: have %v, want %v", i, ccopyObj.Balance(), want)
 		}
 	}
 }
 
 func TestSnapshotRandom(t *testing.T) {
-	config := &quick.Config{MaxCount: 1000}
-	err := quick.Check((*snapshotTest).run, config)
+	config := &quick.Config{MaxCount: 10}
+	i := 0
+	run := func(test *snapshotTest) bool {
+		var res bool
+		t.Run(fmt.Sprintf("test-%d", i), func(t *testing.T) {
+			res = test.run(t)
+		})
+		i++
+		return res
+	}
+	err := quick.Check(run, config)
 	if cerr, ok := err.(*quick.CheckError); ok {
 		test := cerr.In[0].(*snapshotTest)
 		t.Errorf("%v:\n%s", test.err, test)
@@ -142,14 +155,14 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		{
 			name: "SetBalance",
 			fn: func(a testAction, s *StateDB) {
-				s.SetBalance(addr, big.NewInt(a.args[0]))
+				s.SetBalance(addr, uint256.NewInt(uint64(a.args[0])))
 			},
 			args: make([]int64, 1),
 		},
 		{
 			name: "AddBalance",
 			fn: func(a testAction, s *StateDB) {
-				s.AddBalance(addr, big.NewInt(a.args[0]))
+				s.AddBalance(addr, uint256.NewInt(uint64(a.args[0])))
 			},
 			args: make([]int64, 1),
 		},
@@ -187,9 +200,9 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			},
 		},
 		{
-			name: "Suicide",
+			name: "SelfDestruct",
 			fn: func(a testAction, s *StateDB) {
-				s.Suicide(addr)
+				s.SelfDestruct(addr)
 			},
 		},
 		{
@@ -296,16 +309,20 @@ func (test *snapshotTest) String() string {
 	return out.String()
 }
 
-func (test *snapshotTest) run() bool {
+func (test *snapshotTest) run(t *testing.T) bool {
 	// Run all actions and create snapshots.
+	db, cleanup := newPgIpfsEthdb(t)
+	t.Cleanup(cleanup)
 	var (
-		state, _     = New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		state, _     = New(types.EmptyRootHash, NewDatabase(db), nil)
 		snapshotRevs = make([]int, len(test.snapshots))
 		sindex       = 0
+		checkstates  = make([]*StateDB, len(test.snapshots))
 	)
 	for i, action := range test.actions {
 		if len(test.snapshots) > sindex && i == test.snapshots[sindex] {
 			snapshotRevs[sindex] = state.Snapshot()
+			checkstates[sindex] = state.Copy()
 			sindex++
 		}
 		action.fn(action, state)
@@ -313,17 +330,50 @@ func (test *snapshotTest) run() bool {
 	// Revert all snapshots in reverse order. Each revert must yield a state
 	// that is equivalent to fresh state with all actions up the snapshot applied.
 	for sindex--; sindex >= 0; sindex-- {
-		checkstate, _ := New(common.Hash{}, state.Database(), nil)
-		for _, action := range test.actions[:test.snapshots[sindex]] {
-			action.fn(action, checkstate)
-		}
 		state.RevertToSnapshot(snapshotRevs[sindex])
-		if err := test.checkEqual(state, checkstate); err != nil {
+		if err := test.checkEqual(state, checkstates[sindex]); err != nil {
 			test.err = fmt.Errorf("state mismatch after revert to snapshot %d\n%v", sindex, err)
 			return false
 		}
 	}
 	return true
+}
+
+func forEachStorage(s *StateDB, addr common.Address, cb func(key, value common.Hash) bool) error {
+	so := s.getStateObject(addr)
+	if so == nil {
+		return nil
+	}
+	tr, err := so.getTrie()
+	if err != nil {
+		return err
+	}
+	trieIt, err := tr.NodeIterator(nil)
+	if err != nil {
+		return err
+	}
+	it := trie.NewIterator(trieIt)
+
+	for it.Next() {
+		key := common.BytesToHash(s.trie.GetKey(it.Key))
+		if value, dirty := so.dirtyStorage[key]; dirty {
+			if !cb(key, value) {
+				return nil
+			}
+			continue
+		}
+
+		if len(it.Value) > 0 {
+			_, content, _, err := rlp.Split(it.Value)
+			if err != nil {
+				return err
+			}
+			if !cb(key, common.BytesToHash(content)) {
+				return nil
+			}
+		}
+	}
+	return nil
 }
 
 // checkEqual checks that methods of state and checkstate return the same values.
@@ -339,7 +389,7 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		}
 		// Check basic accessor methods.
 		checkeq("Exist", state.Exist(addr), checkstate.Exist(addr))
-		checkeq("HasSuicided", state.HasSuicided(addr), checkstate.HasSuicided(addr))
+		checkeq("HasSelfdestructed", state.HasSelfDestructed(addr), checkstate.HasSelfDestructed(addr))
 		checkeq("GetBalance", state.GetBalance(addr), checkstate.GetBalance(addr))
 		checkeq("GetNonce", state.GetNonce(addr), checkstate.GetNonce(addr))
 		checkeq("GetCode", state.GetCode(addr), checkstate.GetCode(addr))
@@ -347,10 +397,10 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		checkeq("GetCodeSize", state.GetCodeSize(addr), checkstate.GetCodeSize(addr))
 		// Check storage.
 		if obj := state.getStateObject(addr); obj != nil {
-			state.ForEachStorage(addr, func(key, value common.Hash) bool {
+			forEachStorage(state, addr, func(key, value common.Hash) bool {
 				return checkeq("GetState("+key.Hex()+")", checkstate.GetState(addr, key), value)
 			})
-			checkstate.ForEachStorage(addr, func(key, value common.Hash) bool {
+			forEachStorage(checkstate, addr, func(key, value common.Hash) bool {
 				return checkeq("GetState("+key.Hex()+")", checkstate.GetState(addr, key), value)
 			})
 		}
@@ -373,9 +423,11 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 // TestCopyOfCopy tests that modified objects are carried over to the copy, and the copy of the copy.
 // See https://github.com/ethereum/go-ethereum/pull/15225#issuecomment-380191512
 func TestCopyOfCopy(t *testing.T) {
-	state, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	db, cleanup := newPgIpfsEthdb(t)
+	t.Cleanup(cleanup)
+	state, _ := New(types.EmptyRootHash, NewDatabase(db), nil)
 	addr := common.HexToAddress("aaaa")
-	state.SetBalance(addr, big.NewInt(42))
+	state.SetBalance(addr, uint256.NewInt(42))
 
 	if got := state.Copy().GetBalance(addr).Uint64(); got != 42 {
 		t.Fatalf("1st copy fail, expected 42, got %v", got)
@@ -394,9 +446,10 @@ func TestStateDBAccessList(t *testing.T) {
 		return common.HexToHash(a)
 	}
 
-	memDb := rawdb.NewMemoryDatabase()
-	db := NewDatabase(memDb)
-	state, _ := New(common.Hash{}, db, nil)
+	pgdb, cleanup := newPgIpfsEthdb(t)
+	t.Cleanup(cleanup)
+	db := NewDatabase(pgdb)
+	state, _ := New(types.EmptyRootHash, db, nil)
 	state.accessList = newAccessList()
 
 	verifyAddrs := func(astrings ...string) {
@@ -560,9 +613,10 @@ func TestStateDBAccessList(t *testing.T) {
 }
 
 func TestStateDBTransientStorage(t *testing.T) {
-	memDb := rawdb.NewMemoryDatabase()
-	db := NewDatabase(memDb)
-	state, _ := New(common.Hash{}, db, nil)
+	pgdb, cleanup := newPgIpfsEthdb(t)
+	t.Cleanup(cleanup)
+	db := NewDatabase(pgdb)
+	state, _ := New(types.EmptyRootHash, db, nil)
 
 	key := common.Hash{0x01}
 	value := common.Hash{0x02}

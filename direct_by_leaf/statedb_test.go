@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/holiman/uint256"
 	"github.com/lib/pq"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
@@ -66,7 +67,7 @@ var (
 
 	Account = types.StateAccount{
 		Nonce:    uint64(0),
-		Balance:  big.NewInt(1000),
+		Balance:  uint256.NewInt(1000),
 		CodeHash: AccountCodeHash.Bytes(),
 		Root:     common.Hash{},
 	}
@@ -112,7 +113,7 @@ func TestPGXSuite(t *testing.T) {
 	database := sql.NewPGXDriverFromPool(context.Background(), pool)
 	insertSuiteData(t, database)
 
-	db := state.NewStateDatabase(database)
+	db := state.NewDatabase(database)
 	require.NoError(t, err)
 	testSuite(t, db)
 }
@@ -137,7 +138,7 @@ func TestSQLXSuite(t *testing.T) {
 	database := sql.NewSQLXDriverFromPool(context.Background(), pool)
 	insertSuiteData(t, database)
 
-	db := state.NewStateDatabase(database)
+	db := state.NewDatabase(database)
 	require.NoError(t, err)
 	testSuite(t, db)
 }
@@ -226,7 +227,7 @@ func insertSuiteData(t *testing.T, database sql.Database) {
 	require.NoError(t, insertContractCode(database))
 }
 
-func testSuite(t *testing.T, db state.StateDatabase) {
+func testSuite(t *testing.T, db state.Database) {
 	t.Run("Database", func(t *testing.T) {
 		size, err := db.ContractCodeSize(AccountCodeHash)
 		require.NoError(t, err)
@@ -309,14 +310,14 @@ func testSuite(t *testing.T, db state.StateDatabase) {
 		newStorage := crypto.Keccak256Hash([]byte{5, 4, 3, 2, 1})
 		newCode := []byte{1, 3, 3, 7}
 
-		sdb.SetBalance(AccountAddress, big.NewInt(300))
-		sdb.AddBalance(AccountAddress, big.NewInt(200))
-		sdb.SubBalance(AccountAddress, big.NewInt(100))
+		sdb.SetBalance(AccountAddress, uint256.NewInt(300))
+		sdb.AddBalance(AccountAddress, uint256.NewInt(200))
+		sdb.SubBalance(AccountAddress, uint256.NewInt(100))
 		sdb.SetNonce(AccountAddress, 42)
 		sdb.SetState(AccountAddress, StorageSlot, newStorage)
 		sdb.SetCode(AccountAddress, newCode)
 
-		require.Equal(t, big.NewInt(400), sdb.GetBalance(AccountAddress))
+		require.Equal(t, uint256.NewInt(400), sdb.GetBalance(AccountAddress))
 		require.Equal(t, uint64(42), sdb.GetNonce(AccountAddress))
 		require.Equal(t, newStorage, sdb.GetState(AccountAddress, StorageSlot))
 		require.Equal(t, newCode, sdb.GetCode(AccountAddress))

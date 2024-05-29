@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package trie
+package triedb
 
 import (
 	"sync"
@@ -67,6 +67,23 @@ func (store *preimageStore) preimage(hash common.Hash) []byte {
 		return preimage
 	}
 	return rawdb.ReadPreimage(store.disk, hash)
+}
+
+// commit flushes the cached preimages into the disk.
+func (store *preimageStore) commit(force bool) error {
+	store.lock.Lock()
+	defer store.lock.Unlock()
+
+	if store.preimagesSize <= 4*1024*1024 && !force {
+		return nil
+	}
+	batch := store.disk.NewBatch()
+	rawdb.WritePreimages(batch, store.preimages)
+	if err := batch.Write(); err != nil {
+		return err
+	}
+	store.preimages, store.preimagesSize = make(map[common.Hash][]byte), 0
+	return nil
 }
 
 // size returns the current storage size of accumulated preimages.

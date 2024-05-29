@@ -34,11 +34,6 @@ package trie
 // in the case of an odd number. All remaining nibbles (now an even number) fit properly
 // into the remaining bytes. Compact encoding is used for nodes stored on disk.
 
-// HexToCompact converts a hex path to the compact encoded format
-func HexToCompact(hex []byte) []byte {
-	return hexToCompact(hex)
-}
-
 func hexToCompact(hex []byte) []byte {
 	terminator := byte(0)
 	if hasTerm(hex) {
@@ -56,9 +51,8 @@ func hexToCompact(hex []byte) []byte {
 	return buf
 }
 
-// hexToCompactInPlace places the compact key in input buffer, returning the length
-// needed for the representation
-func hexToCompactInPlace(hex []byte) int {
+// hexToCompactInPlace places the compact key in input buffer, returning the compacted key.
+func hexToCompactInPlace(hex []byte) []byte {
 	var (
 		hexLen    = len(hex) // length of the hex input
 		firstByte = byte(0)
@@ -82,12 +76,7 @@ func hexToCompactInPlace(hex []byte) int {
 		hex[bi] = hex[ni]<<4 | hex[ni+1]
 	}
 	hex[0] = firstByte
-	return binLen
-}
-
-// CompactToHex converts a compact encoded path to hex format
-func CompactToHex(compact []byte) []byte {
-	return compactToHex(compact)
+	return hex[:binLen]
 }
 
 func compactToHex(compact []byte) []byte {
@@ -115,9 +104,9 @@ func keybytesToHex(str []byte) []byte {
 	return nibbles
 }
 
-// hexToKeyBytes turns hex nibbles into key bytes.
+// hexToKeybytes turns hex nibbles into key bytes.
 // This can only be used for keys of even length.
-func hexToKeyBytes(hex []byte) []byte {
+func hexToKeybytes(hex []byte) []byte {
 	if hasTerm(hex) {
 		hex = hex[:len(hex)-1]
 	}

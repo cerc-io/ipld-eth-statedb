@@ -18,53 +18,39 @@ package state
 
 import (
 	"bytes"
-	"context"
-	"math/big"
 	"testing"
 
-	pgipfsethdb "github.com/cerc-io/ipfs-ethdb/v5/postgres/v0"
-	"github.com/cerc-io/plugeth-statediff/indexer/database/sql/postgres"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-
-	"github.com/cerc-io/ipld-eth-statedb/internal"
+	"github.com/holiman/uint256"
 )
 
-var (
-	testCtx            = context.Background()
-	testConfig, _      = postgres.TestConfig.WithEnv()
-	teardownStatements = []string{`TRUNCATE ipld.blocks`}
-)
-
-type stateTest struct {
+type stateEnv struct {
 	db    ethdb.Database
 	state *StateDB
 }
 
-func newStateTest(t *testing.T) *stateTest {
-	pool, err := postgres.ConnectSQLX(testCtx, testConfig)
+func newStateEnv(t *testing.T) *stateEnv {
+	db, cleanup := newPgIpfsEthdb(t)
+	t.Cleanup(cleanup)
+	sdb, err := New(types.EmptyRootHash, NewDatabase(db), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	db := pgipfsethdb.NewDatabase(pool, internal.MakeCacheConfig(t))
-	sdb, err := New(common.Hash{}, NewDatabase(db), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return &stateTest{db: db, state: sdb}
+	return &stateEnv{db: db, state: sdb}
 }
 
 func TestNull(t *testing.T) {
-	s := newStateTest(t)
+	s := newStateEnv(t)
 	address := common.HexToAddress("0x823140710bf13990e4500136726d8b55")
 	s.state.CreateAccount(address)
 	//value := common.FromHex("0x823140710bf13990e4500136726d8b55")
 	var value common.Hash
 
 	s.state.SetState(address, common.Hash{}, value)
-	// s.state.Commit(false)
+	// s.state.Commit(0, false)
 
 	if value := s.state.GetState(address, common.Hash{}); value != (common.Hash{}) {
 		t.Errorf("expected empty current value, got %x", value)
@@ -79,7 +65,7 @@ func TestSnapshot(t *testing.T) {
 	var storageaddr common.Hash
 	data1 := common.BytesToHash([]byte{42})
 	data2 := common.BytesToHash([]byte{43})
-	s := newStateTest(t)
+	s := newStateEnv(t)
 
 	// snapshot the genesis state
 	genesis := s.state.Snapshot()
@@ -110,12 +96,14 @@ func TestSnapshot(t *testing.T) {
 }
 
 func TestSnapshotEmpty(t *testing.T) {
-	s := newStateTest(t)
+	s := newStateEnv(t)
 	s.state.RevertToSnapshot(s.state.Snapshot())
 }
 
 func TestSnapshot2(t *testing.T) {
-	state, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	db, cleanup := newPgIpfsEthdb(t)
+	t.Cleanup(cleanup)
+	state, _ := New(types.EmptyRootHash, NewDatabase(db), nil)
 
 	stateobjaddr0 := common.BytesToAddress([]byte("so0"))
 	stateobjaddr1 := common.BytesToAddress([]byte("so1"))
@@ -129,22 +117,22 @@ func TestSnapshot2(t *testing.T) {
 
 	// db, trie are already non-empty values
 	so0 := state.getStateObject(stateobjaddr0)
-	so0.SetBalance(big.NewInt(42))
+	so0.SetBalance(uint256.NewInt(42))
 	so0.SetNonce(43)
 	so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
-	so0.suicided = false
+	so0.selfDestructed = false
 	so0.deleted = false
 	state.setStateObject(so0)
 
-	// root, _ := state.Commit(false)
+	// root, _ := state.Commit(0, false)
 	// state, _ = New(root, state.db, state.snaps)
 
 	// and one with deleted == true
 	so1 := state.getStateObject(stateobjaddr1)
-	so1.SetBalance(big.NewInt(52))
+	so1.SetBalance(uint256.NewInt(52))
 	so1.SetNonce(53)
 	so1.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e', '2'}), []byte{'c', 'a', 'f', 'e', '2'})
-	so1.suicided = true
+	so1.selfDestructed = true
 	so1.deleted = true
 	state.setStateObject(so1)
 
@@ -158,8 +146,8 @@ func TestSnapshot2(t *testing.T) {
 
 	so0Restored := state.getStateObject(stateobjaddr0)
 	// Update lazily-loaded values before comparing.
-	so0Restored.GetState(state.db, storageaddr)
-	so0Restored.Code(state.db)
+	so0Restored.GetState(storageaddr)
+	so0Restored.Code()
 	// non-deleted is equal (restored)
 	compareStateObjects(so0Restored, so0, t)
 
