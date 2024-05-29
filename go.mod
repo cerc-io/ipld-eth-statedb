@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.2
 	github.com/cerc-io/ipfs-ethdb/v5 v5.1.0-alpha
-	github.com/cerc-io/plugeth-statediff v0.2.0
+	github.com/cerc-io/plugeth-statediff v0.2.1
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233
 	github.com/davecgh/go-spew v1.1.1
 	github.com/ethereum/go-ethereum v1.13.14
@@ -110,9 +110,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.2.2 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
-)
-
-replace (
-	github.com/cerc-io/ipfs-ethdb/v5 => github.com/cerc-io/ipfs-ethdb/v5 v5.1.0-alpha
-	github.com/cerc-io/plugeth-statediff => github.com/cerc-io/plugeth-statediff v0.2.1
 )
