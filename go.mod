@@ -8,7 +8,7 @@ require (
 	github.com/cerc-io/plugeth-statediff v0.2.0
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233
 	github.com/davecgh/go-spew v1.1.1
-	github.com/ethereum/go-ethereum v1.13.14
+	github.com/ethereum/go-ethereum v1.13.15
 	github.com/gballet/go-verkle v0.1.1-0.20231031103413-a67434b50f46
 	github.com/hashicorp/golang-lru v1.0.2
 	github.com/holiman/uint256 v1.2.4
