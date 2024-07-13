@@ -8,6 +8,7 @@ import (
 
 	pgipfsethdb "github.com/cerc-io/ipfs-ethdb/v5/postgres/v0"
 	"github.com/cerc-io/plugeth-statediff/indexer/database/sql/postgres"
+	indexer_helpers "github.com/cerc-io/plugeth-statediff/indexer/test_helpers"
 	helpers "github.com/cerc-io/plugeth-statediff/test_helpers"
 	"github.com/cerc-io/plugeth-statediff/test_helpers/chaingen"
 	"github.com/ethereum/go-ethereum/common"
@@ -49,7 +50,7 @@ func newPgIpfsEthdb(t *testing.T) (ethdb.Database, func()) {
 	}
 	db := pgipfsethdb.NewDatabase(pool, internal.MakeCacheConfig(t))
 	cleanup := func() {
-		err := helpers.ClearDB(pool)
+		err := indexer_helpers.ClearSqlxDB(pool)
 		if err != nil {
 			panic(err)
 		}

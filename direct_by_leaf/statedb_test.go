@@ -5,17 +5,18 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/holiman/uint256"
-	"github.com/lib/pq"
-	"github.com/multiformats/go-multihash"
-	"github.com/stretchr/testify/require"
-
 	"github.com/cerc-io/plugeth-statediff/indexer/database/sql/postgres"
 	"github.com/cerc-io/plugeth-statediff/indexer/ipld"
+	"github.com/cerc-io/plugeth-statediff/indexer/shared"
+	"github.com/cerc-io/plugeth-statediff/indexer/shared/schema"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
+	"github.com/lib/pq"
+	"github.com/multiformats/go-multihash"
+	"github.com/stretchr/testify/require"
 
 	state "github.com/cerc-io/ipld-eth-statedb/direct_by_leaf"
 	util "github.com/cerc-io/ipld-eth-statedb/internal"
@@ -343,24 +344,7 @@ func insertHeaderCID(db sql.Database, blockHash, parentHash string, blockNumber 
 	if err != nil {
 		return err
 	}
-	sql := `INSERT INTO eth.header_cids (
-	block_number,
-	block_hash,
-	parent_hash,
-	cid,
-	td,
-	node_ids,
-	reward,
-	state_root,
-	tx_root,
-	receipt_root,
-	uncles_hash,
-	bloom,
-	timestamp,
-	coinbase,
-	canonical
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
-	_, err = db.Exec(testCtx, sql,
+	_, err = db.Exec(testCtx, schema.TableHeader.PreparedInsert(false),
 		blockNumber,
 		blockHash,
 		parentHash,
@@ -374,6 +358,7 @@ func insertHeaderCID(db sql.Database, blockHash, parentHash string, blockNumber 
 		Header.Time,
 		Header.Coinbase.String(),
 		canon,
+		shared.MaybeStringHash(Header.WithdrawalsHash),
 	)
 	return err
 }
@@ -392,19 +377,7 @@ type stateModel struct {
 }
 
 func insertStateCID(db sql.Database, cidModel stateModel) error {
-	sql := `INSERT INTO eth.state_cids (
-	block_number,
-	header_id,
-	state_leaf_key,
-	cid,
-	diff,
-	balance,
-	nonce,
-	code_hash,
-	storage_root,
-	removed
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
-	_, err := db.Exec(testCtx, sql,
+	_, err := db.Exec(testCtx, schema.TableStateNode.PreparedInsert(false),
 		cidModel.BlockNumber,
 		cidModel.BlockHash,
 		cidModel.LeafKey,
@@ -431,17 +404,7 @@ type storageModel struct {
 }
 
 func insertStorageCID(db sql.Database, cidModel storageModel) error {
-	sql := `INSERT INTO eth.storage_cids (
-	block_number,
-	header_id,
-	state_leaf_key,
-	storage_leaf_key,
-	cid,
-	diff,
-	val,
-	removed
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
-	_, err := db.Exec(testCtx, sql,
+	_, err := db.Exec(testCtx, schema.TableStorageNode.PreparedInsert(false),
 		cidModel.BlockNumber,
 		cidModel.BlockHash,
 		cidModel.LeafKey,

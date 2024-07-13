@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.2
 	github.com/cerc-io/ipfs-ethdb/v5 v5.1.0-alpha
-	github.com/cerc-io/plugeth-statediff v0.2.1
+	github.com/cerc-io/plugeth-statediff v0.3.2
 	github.com/crate-crypto/go-ipa v0.0.0-20231025140028-3c0104f4b233
 	github.com/davecgh/go-spew v1.1.1
 	github.com/ethereum/go-ethereum v1.13.14
@@ -30,7 +30,7 @@ require (
 	github.com/bits-and-blooms/bitset v1.10.0 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.2 // indirect
-	github.com/cerc-io/eth-iterator-utils v0.2.0 // indirect
+	github.com/cerc-io/eth-iterator-utils v0.3.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cockroachdb/errors v1.10.0 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
