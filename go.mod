@@ -1,6 +1,6 @@
 module github.com/cerc-io/ipld-eth-statedb
 
-go 1.21
+go 1.24
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.2
@@ -61,7 +61,7 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/pgtype v1.14.0 // indirect
 	github.com/jackc/puddle v1.3.0 // indirect
-	github.com/klauspost/compress v1.16.7 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
